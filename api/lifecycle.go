@@ -1,4 +1,4 @@
-// api/lifecycle_api.go
+// api/lifecycle.go
 
 package api
 
