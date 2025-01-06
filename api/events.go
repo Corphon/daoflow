@@ -121,12 +121,22 @@ func NewEventsAPI(sys *system.SystemCore) *EventsAPI {
     return api
 }
 
+// 更新 Subscribe 方法
 func (e *EventsAPI) Subscribe(filter EventFilter) (*Subscription, error) {
-    // 使用动态缓冲区替换固定大小的通道
+    bufferConfig := system.ResizePolicy{
+        MinCapacity:    100,
+        MaxCapacity:    10000,
+        GrowthFactor:   2.0,
+        ShrinkFactor:   0.5,
+        ResizeInterval: time.Minute,
+    }
+    
+    buffer := system.NewDynamicBuffer(500, bufferConfig)
+    
     sub := &Subscription{
         ID:      generateSubscriptionID(),
         Filter:  filter,
-        Channel: e.eventQueue.normalPriority.buffer,
+        Channel: buffer.buffer,
         Active:  true,
     }
     
