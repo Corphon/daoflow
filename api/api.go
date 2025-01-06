@@ -10,7 +10,7 @@ import (
 )
 
 // APIVersion API 版本
-const APIVersion = "v1.0.0"
+const APIVersion = "v2.0.0"
 
 // DaoFlowAPI 道流API客户端
 type DaoFlowAPI struct {
@@ -32,6 +32,9 @@ type DaoFlowAPI struct {
     // 上下文控制
     ctx    context.Context
     cancel context.CancelFunc
+
+    adapter    *SystemAdapter        // 添加系统适配器
+    bufferPool map[string]*DynamicBuffer // 添加缓冲池
 }
 
 // Options API选项配置
