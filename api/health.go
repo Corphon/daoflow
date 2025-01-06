@@ -87,6 +87,16 @@ type HealthAPI struct {
     
     ctx      context.Context
     cancel   context.CancelFunc
+
+    bufferMetrics *BufferMetrics    // 添加缓冲区监控
+}
+
+// 添加新的指标结构
+type BufferMetrics struct {
+    Utilization    float64
+    DropRate       float64
+    ResizeCount    int64
+    LastResize     time.Time
 }
 
 // NewHealthAPI 创建健康检查API实例
