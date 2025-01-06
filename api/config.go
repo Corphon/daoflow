@@ -72,6 +72,9 @@ type ConfigAPI struct {
     // 上下文控制
     ctx    context.Context
     cancel context.CancelFunc
+
+    // ConfigAPI 添加缓冲区配置支持
+    bufferConfig map[string]*BufferConfig
 }
 
 // ConfigEvent 配置事件
@@ -81,6 +84,15 @@ type ConfigEvent struct {
     Value     *ConfigValue `json:"value"`      // 配置值
     Version   int64       `json:"version"`    // 版本号
     Timestamp time.Time   `json:"timestamp"`  // 事件时间
+}
+
+// 添加缓冲区配置
+type BufferConfig struct {
+    MinCapacity     int           `json:"min_capacity"`
+    MaxCapacity     int           `json:"max_capacity"`
+    GrowthFactor    float64       `json:"growth_factor"`
+    ShrinkFactor    float64       `json:"shrink_factor"`
+    ResizeInterval  time.Duration `json:"resize_interval"`
 }
 
 // NewConfigAPI 创建配置API实例
