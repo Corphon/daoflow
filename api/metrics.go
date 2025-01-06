@@ -18,6 +18,7 @@ const (
     TypeCounter   MetricType = "counter"    // 计数器类型(只增)
     TypeHistogram MetricType = "histogram"  // 直方图类型(分布)
     TypeSummary   MetricType = "summary"    // 摘要类型(统计)
+    TypeBuffer    MetricType = "buffer"    // 缓冲区指标
 )
 
 // MetricValue 指标值
@@ -68,6 +69,9 @@ type MetricsAPI struct {
     
     ctx    context.Context
     cancel context.CancelFunc
+
+    // MetricsAPI 添加缓冲区指标支持
+    bufferStats map[string]*BufferStats
 }
 
 // MetricEvent 指标事件
