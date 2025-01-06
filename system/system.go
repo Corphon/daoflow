@@ -49,6 +49,9 @@ type SystemCore struct {
 
     ctx    context.Context
     cancel context.CancelFunc
+
+    eventQueue  *PriorityEventQueue
+    bufferPool  map[string]*DynamicBuffer
 }
 
 // SystemConfig 系统配置
@@ -168,6 +171,23 @@ func (sc *SystemCore) initializeSubsystems(ctx context.Context) error {
         sc.optimization, sc.integrate)
 
     return nil
+}
+
+func (sc *SystemCore) initializeEventHandling() {
+    sc.eventQueue = NewPriorityEventQueue(sc.ctx)
+    sc.bufferPool = make(map[string]*DynamicBuffer)
+    
+    // 初始化各个系统的缓冲区
+    policy := ResizePolicy{
+        MinCapacity:    100,
+        MaxCapacity:    5000,
+        GrowthFactor:   1.5,
+        ShrinkFactor:   0.7,
+        ResizeInterval: time.Minute,
+    }
+    
+    sc.bufferPool["state"] = NewDynamicBuffer(StateBufferSize, policy)
+    sc.bufferPool["events"] = NewDynamicBuffer(1000, policy)
 }
 
 // run 运行系统
