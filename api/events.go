@@ -89,6 +89,8 @@ type EventsAPI struct {
     
     ctx    context.Context
     cancel context.CancelFunc
+
+    eventQueue  *system.PriorityEventQueue
 }
 
 // EventStats 事件统计
@@ -117,6 +119,18 @@ func NewEventsAPI(sys *system.SystemCore) *EventsAPI {
     }
     
     return api
+}
+
+func (e *EventsAPI) Subscribe(filter EventFilter) (*Subscription, error) {
+    // 使用动态缓冲区替换固定大小的通道
+    sub := &Subscription{
+        ID:      generateSubscriptionID(),
+        Filter:  filter,
+        Channel: e.eventQueue.normalPriority.buffer,
+        Active:  true,
+    }
+    
+    return sub, nil
 }
 
 // Publish 发布事件
