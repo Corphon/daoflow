@@ -1,12 +1,10 @@
-基于代码分析，我将为DaoFlow框架编写一个专业的README.md。这个框架是一个复杂的系统框架，具有流管理、演化系统和动态调节等特性。
 
-```markdown
 # DaoFlow Framework
-
+```
 [![Version](https://img.shields.io/badge/version-v2.0.0-blue.svg)](https://github.com/Corphon/daoflow)
 [![Go Reference](https://pkg.go.dev/badge/github.com/Corphon/daoflow.svg)](https://pkg.go.dev/github.com/Corphon/daoflow)
 [![License](https://img.shields.io/github/license/Corphon/daoflow.svg)](LICENSE)
-
+```
 DaoFlow 是一个基于 Go 语言的高性能自适应系统框架，融合了东方哲学中阴阳五行的思想，实现了一个能够自我演化、动态平衡的系统架构。
 
 ## 核心特性
@@ -188,4 +186,3 @@ if err != nil {
 - GitHub Issues: [https://github.com/Corphon/daoflow/issues](https://github.com/Corphon/daoflow/issues)
 - Email: [contact@corphon.com](mailto:contact@corphon.com)
 
-```
