@@ -86,6 +86,57 @@ type TrigramSystem struct {
 }
 ```
 
+### Heavenly Stems and Earthly Branches Theory (干支论)
+
+The GanZhi system provides a cyclical time-space framework that DaoFlow uses for temporal pattern recognition and state transitions:
+
+```go
+type GanZhiSystem struct {
+    // Heavenly Stems (天干)
+    HeavenlyStems []Stem{
+        Jia{element: Wood, polarity: Yang},   // 甲
+        Yi{element: Wood, polarity: Yin},     // 乙
+        Bing{element: Fire, polarity: Yang},  // 丙
+        Ding{element: Fire, polarity: Yin},   // 丁
+        Wu{element: Earth, polarity: Yang},   // 戊
+        Ji{element: Earth, polarity: Yin},    // 己
+        Geng{element: Metal, polarity: Yang}, // 庚
+        Xin{element: Metal, polarity: Yin},   // 辛
+        Ren{element: Water, polarity: Yang},  // 壬
+        Gui{element: Water, polarity: Yin},   // 癸
+    }
+
+    // Earthly Branches (地支)
+    EarthlyBranches []Branch{
+        Zi{element: Water, storage: Water},     // 子
+        Chou{element: Earth, storage: Water},   // 丑
+        Yin{element: Wood, storage: Wood},      // 寅
+        Mao{element: Wood, storage: Wood},      // 卯
+        Chen{element: Earth, storage: Earth},   // 辰
+        Si{element: Fire, storage: Fire},       // 巳
+        Wu{element: Fire, storage: Fire},       // 午
+        Wei{element: Earth, storage: Earth},    // 未
+        Shen{element: Metal, storage: Metal},   // 申
+        You{element: Metal, storage: Metal},    // 酉
+        Xu{element: Earth, storage: Earth},     // 戌
+        Hai{element: Water, storage: Water},    // 亥
+    }
+}
+
+// GanZhi cycle implementation
+type GanZhiCycle struct {
+    // 60-cycle combination
+    Cycle [60]struct {
+        Stem   Stem
+        Branch Branch
+        // Combined energy calculation
+        Energy float64
+    }
+
+    // State transition matrix
+    TransitionMatrix [60][60]float64
+}
+```
 ## Quantum Field Theory Application
 
 ### Unified Field Model
