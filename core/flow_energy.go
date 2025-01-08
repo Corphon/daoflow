@@ -5,6 +5,12 @@ package core
 import (
     "math"
     "sync"
+    "errors"
+)
+
+var (
+    ErrExceedCapacity   = errors.New("energy exceeds system capacity")
+    ErrInvalidParameter = errors.New("invalid parameter value")
 )
 
 // EnergyType 能量类型
