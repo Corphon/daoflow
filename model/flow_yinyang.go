@@ -4,6 +4,7 @@ package model
 
 import (
     "math"
+    "sync"
     "time"
 
     "github.com/Corphon/daoflow/core"
@@ -11,240 +12,271 @@ import (
 
 // YinYangConstants 阴阳常数
 const (
-    YinYangPeriod     = 2 * math.Pi       // 阴阳周期
-    YinYangThreshold  = 0.5               // 阴阳转换阈值
-    YinEntropyFactor  = 0.3               // 阴熵因子
-    YangEntropyFactor = 0.7               // 阳熵因子
+    MaxYinYangEnergy  = 100.0  // 最大能量
+    BalanceThreshold  = 0.1    // 平衡阈值
+    TransformRate     = 0.05   // 转换率
+    MinPolarity      = -1.0   // 最小极性
+    MaxPolarity      = 1.0    // 最大极性
 )
 
 // YinYangFlow 阴阳模型
 type YinYangFlow struct {
-    *BaseFlowModel
+    *BaseFlowModel // 继承基础模型
 
-    // 阴阳特有状态
-    yinEnergy  float64                 // 阴能量
-    yangEnergy float64                 // 阳能量
-    balance    float64                 // 平衡度
-    
-    // 量子场组件
-    yinField   *core.Field            // 阴场
-    yangField  *core.Field            // 阳场
-    
-    // 量子态组件
-    yinState   *core.QuantumState     // 阴量子态
-    yangState  *core.QuantumState     // 阳量子态
+    // 内部状态 - 对外隐藏实现
+    state struct {
+        yinEnergy  float64    // 阴能量
+        yangEnergy float64    // 阳能量
+        polarity   float64    // 极性
+        balance    float64    // 平衡度
+    }
+
+    // 内部组件 - 使用 core 层功能
+    components struct {
+        yinField   *core.Field        // 阴场
+        yangField  *core.Field        // 阳场
+        yinState   *core.QuantumState // 阴量子态
+        yangState  *core.QuantumState // 阳量子态
+        interaction *core.Interaction  // 相互作用
+    }
+
+    mu sync.RWMutex
 }
 
 // NewYinYangFlow 创建阴阳模型
 func NewYinYangFlow() *YinYangFlow {
-    base := NewBaseFlowModel(ModelYinYang, 200.0)
-    
-    yy := &YinYangFlow{
+    // 创建基础模型
+    base := NewBaseFlowModel(ModelYinYang, MaxYinYangEnergy)
+
+    // 创建阴阳模型
+    flow := &YinYangFlow{
         BaseFlowModel: base,
-        yinField:      core.NewField(),
-        yangField:     core.NewField(),
-        yinState:      core.NewQuantumState(),
-        yangState:     core.NewQuantumState(),
     }
 
-    // 初始化状态
-    yy.state.Phase = PhaseYinYang
-    yy.state.Nature = NatureYang // 默认从阳开始
-    yy.state.Properties["balance"] = 0.5
-    
-    return yy
+    // 初始化内部组件
+    flow.initializeComponents()
+
+    return flow
 }
 
-// Transform 阴阳转换实现
-func (yy *YinYangFlow) Transform(pattern TransformPattern) error {
-    yy.mu.Lock()
-    defer yy.mu.Unlock()
+// initializeComponents 初始化组件
+func (f *YinYangFlow) initializeComponents() {
+    // 创建场
+    f.components.yinField = core.NewField()
+    f.components.yangField = core.NewField()
 
-    if !yy.running {
-        return NewModelError(ErrCodeOperation, "model not running", nil)
+    // 创建量子态
+    f.components.yinState = core.NewQuantumState()
+    f.components.yangState = core.NewQuantumState()
+
+    // 创建相互作用
+    f.components.interaction = core.NewInteraction()
+}
+
+// Start 启动模型
+func (f *YinYangFlow) Start() error {
+    if err := f.BaseFlowModel.Start(); err != nil {
+        return err
     }
 
-    // 计算阴阳转换
-    switch pattern {
-    case PatternNormal:
-        yy.naturalTransform()
-    case PatternForward:
-        yy.forwardTransform()
-    case PatternReverse:
-        yy.reverseTransform()
-    case PatternBalance:
-        yy.balanceTransform()
-    case PatternMutate:
-        yy.mutateTransform()
-    default:
-        return NewModelError(ErrCodeOperation, "invalid transform pattern", nil)
+    // 初始化内部状态
+    return f.initializeYinYang()
+}
+
+// initializeYinYang 初始化阴阳
+func (f *YinYangFlow) initializeYinYang() error {
+    f.mu.Lock()
+    defer f.mu.Unlock()
+
+    // 初始化能量
+    totalEnergy := f.BaseFlowModel.GetState().Energy
+    f.state.yinEnergy = totalEnergy / 2
+    f.state.yangEnergy = totalEnergy / 2
+    f.state.polarity = 0
+    f.state.balance = 1.0
+
+    // 初始化场
+    if err := f.components.yinField.Initialize(); err != nil {
+        return WrapError(err, ErrCodeOperation, "failed to initialize yin field")
+    }
+    if err := f.components.yangField.Initialize(); err != nil {
+        return WrapError(err, ErrCodeOperation, "failed to initialize yang field")
     }
 
-    // 更新量子态
-    yy.updateQuantumStates()
-    
-    // 更新场
-    yy.updateFields()
-    
-    // 更新状态
-    yy.updateModelState()
+    // 初始化量子态
+    if err := f.components.yinState.Initialize(); err != nil {
+        return WrapError(err, ErrCodeOperation, "failed to initialize yin state")
+    }
+    if err := f.components.yangState.Initialize(); err != nil {
+        return WrapError(err, ErrCodeOperation, "failed to initialize yang state")
+    }
 
     return nil
 }
 
-// naturalTransform 自然转换
-func (yy *YinYangFlow) naturalTransform() {
-    // 使用量子态演化
-    phase := yy.quantum.GetPhase()
-    newPhase := math.Mod(phase + YinYangPeriod/360.0, YinYangPeriod)
-    yy.quantum.SetPhase(newPhase)
-    
-    // 计算能量分配
-    totalEnergy := yy.state.Energy
-    ratio := (math.Sin(newPhase) + 1) / 2 // 转换到 [0,1] 区间
-    
-    yy.yinEnergy = totalEnergy * (1 - ratio)
-    yy.yangEnergy = totalEnergy * ratio
-}
-
-// forwardTransform 顺序转换
-func (yy *YinYangFlow) forwardTransform() {
-    if yy.state.Nature == NatureYin {
-        yy.transformToYang()
-    } else {
-        yy.transformToYin()
+// Transform 执行阴阳转换
+func (f *YinYangFlow) Transform(pattern TransformPattern) error {
+    if err := f.BaseFlowModel.Transform(pattern); err != nil {
+        return err
     }
-}
 
-// reverseTransform 逆序转换
-func (yy *YinYangFlow) reverseTransform() {
-    if yy.state.Nature == NatureYin {
-        yy.transformToYin()
-    } else {
-        yy.transformToYang()
+    f.mu.Lock()
+    defer f.mu.Unlock()
+
+    switch pattern {
+    case PatternBalance:
+        return f.balanceTransform()
+    case PatternForward:
+        return f.yinToYangTransform()
+    case PatternReverse:
+        return f.yangToYinTransform()
+    default:
+        return f.naturalTransform()
     }
 }
 
 // balanceTransform 平衡转换
-func (yy *YinYangFlow) balanceTransform() {
-    totalEnergy := yy.state.Energy
-    yy.yinEnergy = totalEnergy * 0.5
-    yy.yangEnergy = totalEnergy * 0.5
-    yy.balance = 1.0
-}
+func (f *YinYangFlow) balanceTransform() error {
+    // 计算总能量
+    totalEnergy := f.state.yinEnergy + f.state.yangEnergy
 
-// mutateTransform 变异转换
-func (yy *YinYangFlow) mutateTransform() {
-    // 使用量子涨落
-    fluctuation := yy.quantum.GetFluctuation()
-    
-    // 计算新的能量分配
-    totalEnergy := yy.state.Energy
-    ratio := 0.5 + fluctuation
-    
-    yy.yinEnergy = totalEnergy * ratio
-    yy.yangEnergy = totalEnergy * (1 - ratio)
-}
+    // 均衡分配
+    f.state.yinEnergy = totalEnergy / 2
+    f.state.yangEnergy = totalEnergy / 2
+    f.state.polarity = 0
 
-// transformToYin 转换到阴
-func (yy *YinYangFlow) transformToYin() {
-    totalEnergy := yy.state.Energy
-    transferEnergy := totalEnergy * 0.2 // 每次转换20%
-    
-    yy.yinEnergy += transferEnergy
-    yy.yangEnergy -= transferEnergy
-    
-    if yy.yinEnergy > yy.yangEnergy {
-        yy.state.Nature = NatureYin
+    // 更新量子态
+    if err := f.components.yinState.Reset(); err != nil {
+        return err
     }
+    if err := f.components.yangState.Reset(); err != nil {
+        return err
+    }
+
+    // 更新场
+    if err := f.components.yinField.Reset(); err != nil {
+        return err
+    }
+    if err := f.components.yangField.Reset(); err != nil {
+        return err
+    }
+
+    return f.updateState()
 }
 
-// transformToYang 转换到阳
-func (yy *YinYangFlow) transformToYang() {
-    totalEnergy := yy.state.Energy
-    transferEnergy := totalEnergy * 0.2 // 每次转换20%
+// yinToYangTransform 阴转阳
+func (f *YinYangFlow) yinToYangTransform() error {
+    // 计算转换量
+    transferAmount := f.state.yinEnergy * TransformRate
+
+    // 执行转换
+    f.state.yinEnergy -= transferAmount
+    f.state.yangEnergy += transferAmount
+
+    // 更新极性
+    f.state.polarity = math.Min(f.state.polarity+TransformRate, MaxPolarity)
+
+    // 更新量子态
+    return f.updateQuantumStates()
+}
+
+// yangToYinTransform 阳转阴
+func (f *YinYangFlow) yangToYinTransform() error {
+    // 计算转换量
+    transferAmount := f.state.yangEnergy * TransformRate
+
+    // 执行转换
+    f.state.yangEnergy -= transferAmount
+    f.state.yinEnergy += transferAmount
+
+    // 更新极性
+    f.state.polarity = math.Max(f.state.polarity-TransformRate, MinPolarity)
+
+    // 更新量子态
+    return f.updateQuantumStates()
+}
+
+// naturalTransform 自然转换
+func (f *YinYangFlow) naturalTransform() error {
+    // 计算能量差异
+    energyDiff := math.Abs(f.state.yinEnergy - f.state.yangEnergy)
     
-    yy.yangEnergy += transferEnergy
-    yy.yinEnergy -= transferEnergy
-    
-    if yy.yangEnergy > yy.yinEnergy {
-        yy.state.Nature = NatureYang
+    // 如果差异小于阈值，保持平衡
+    if energyDiff < BalanceThreshold {
+        return nil
     }
+
+    // 根据极性决定转换方向
+    if f.state.polarity > 0 {
+        return f.yinToYangTransform()
+    }
+    return f.yangToYinTransform()
 }
 
 // updateQuantumStates 更新量子态
-func (yy *YinYangFlow) updateQuantumStates() {
-    totalEnergy := yy.state.Energy
-    
-    // 更新阴态
-    yinProb := yy.yinEnergy / totalEnergy
-    yy.yinState.SetProbability(yinProb)
-    yy.yinState.Evolve("yin")
-    
-    // 更新阳态
-    yangProb := yy.yangEnergy / totalEnergy
-    yy.yangState.SetProbability(yangProb)
-    yy.yangState.Evolve("yang")
-    
-    // 更新整体量子态
-    yy.quantum.SetProbability((yinProb + yangProb) / 2)
-    yy.quantum.Evolve("yinyang")
+func (f *YinYangFlow) updateQuantumStates() error {
+    // 更新阴量子态
+    if err := f.components.yinState.SetEnergy(f.state.yinEnergy); err != nil {
+        return err
+    }
+
+    // 更新阳量子态
+    if err := f.components.yangState.SetEnergy(f.state.yangEnergy); err != nil {
+        return err
+    }
+
+    // 更新相互作用
+    return f.components.interaction.Update(
+        f.components.yinState,
+        f.components.yangState,
+    )
 }
 
-// updateFields 更新场
-func (yy *YinYangFlow) updateFields() {
-    totalEnergy := yy.state.Energy
-    
-    // 更新阴场
-    yy.yinField.SetStrength(yy.yinEnergy / totalEnergy)
-    yy.yinField.SetPhase(yy.quantum.GetPhase())
-    yy.yinField.Evolve()
-    
-    // 更新阳场
-    yy.yangField.SetStrength(yy.yangEnergy / totalEnergy)
-    yy.yangField.SetPhase(yy.quantum.GetPhase() + math.Pi) // 反相位
-    yy.yangField.Evolve()
-    
-    // 更新统一场
-    fieldStrength := (yy.yinField.GetStrength() + yy.yangField.GetStrength()) / 2
-    yy.field.SetStrength(fieldStrength)
-    yy.field.Evolve()
-}
-
-// updateModelState 更新模型状态
-func (yy *YinYangFlow) updateModelState() {
+// updateState 更新状态
+func (f *YinYangFlow) updateState() error {
     // 计算平衡度
-    totalEnergy := yy.state.Energy
-    if totalEnergy > 0 {
-        yinRatio := yy.yinEnergy / totalEnergy
-        yangRatio := yy.yangEnergy / totalEnergy
-        yy.balance = 1 - math.Abs(yinRatio - yangRatio)
-    }
+    f.state.balance = 1 - math.Abs(f.state.polarity)
 
-    // 更新状态属性
-    yy.state.Properties["yinEnergy"] = yy.yinEnergy
-    yy.state.Properties["yangEnergy"] = yy.yangEnergy
-    yy.state.Properties["balance"] = yy.balance
-    yy.state.Properties["phase"] = yy.quantum.GetPhase()
-    yy.state.UpdateTime = time.Now()
+    // 更新基础状态
+    modelState := f.GetState()
+    modelState.Energy = f.state.yinEnergy + f.state.yangEnergy
+    modelState.Phase = f.determinePhase()
+    modelState.Nature = f.determineNature()
+    modelState.UpdateTime = time.Now()
+
+    return nil
 }
 
-// GetYinYangRatio 获取阴阳比例
-func (yy *YinYangFlow) GetYinYangRatio() (float64, float64) {
-    yy.mu.RLock()
-    defer yy.mu.RUnlock()
-    
-    totalEnergy := yy.state.Energy
-    if totalEnergy <= 0 {
-        return 0.5, 0.5
+// determinePhase 确定相位
+func (f *YinYangFlow) determinePhase() Phase {
+    if f.state.polarity > 0 {
+        return PhaseYang
     }
-    
-    return yy.yinEnergy/totalEnergy, yy.yangEnergy/totalEnergy
+    return PhaseYin
 }
 
-// GetBalance 获取平衡度
-func (yy *YinYangFlow) GetBalance() float64 {
-    yy.mu.RLock()
-    defer yy.mu.RUnlock()
-    return yy.balance
+// determineNature 确定属性
+func (f *YinYangFlow) determineNature() Nature {
+    if math.Abs(f.state.polarity) < BalanceThreshold {
+        return NatureNeutral
+    }
+    if f.state.polarity > 0 {
+        return NatureYang
+    }
+    return NatureYin
+}
+
+// Close 关闭模型
+func (f *YinYangFlow) Close() error {
+    f.mu.Lock()
+    defer f.mu.Unlock()
+
+    // 清理内部组件
+    f.components.yinField = nil
+    f.components.yangField = nil
+    f.components.yinState = nil
+    f.components.yangState = nil
+    f.components.interaction = nil
+
+    return f.BaseFlowModel.Close()
 }
