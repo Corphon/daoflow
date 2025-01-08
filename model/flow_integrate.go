@@ -19,6 +19,9 @@ const (
     SystemLayers     = 4           // 系统层数(阴阳、五行、八卦、干支)
 )
 
+// 模型类型常量
+const ModelIntegrate ModelType = iota // 集成模型
+
 // FlowSystem 流系统状态
 type FlowSystem struct {
     Energy     float64            // 系统能量
