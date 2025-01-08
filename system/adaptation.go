@@ -8,7 +8,7 @@ import (
     "time"
     "context"
 
-    "github.com/Corphon/daoframe/model"
+    "github.com/Corphon/daoflow/model"
 )
 
 // AdaptationConstants 适应常数
