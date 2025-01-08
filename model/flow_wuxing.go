@@ -42,8 +42,8 @@ type RelationType uint8
 
 const (
     Generate RelationType = iota // 相生
-    Restrict                    // 相克
-    Counter                     // 相泄
+    Restrict              // 相克
+    Counter               // 相泄
 )
 
 // WuXingFlow 五行模型
@@ -53,26 +53,14 @@ type WuXingFlow struct {
     // 相位能量
     phaseEnergies map[WuXingPhase]float64
     
+    // 相位场效应
+    phaseFields map[WuXingPhase]*core.Field
+    
     // 关系矩阵
     relations []PhaseRelation
     
-    // 场效应
-    fieldEffects map[WuXingPhase]*FieldEffect
-    
-    // 周期控制
-    cycleControl struct {
-        currentPhase WuXingPhase
-        cycleTime    time.Duration
-        lastCycle    time.Time
-    }
-}
-
-// FieldEffect 场效应
-type FieldEffect struct {
-    Strength    float64   // 场强度
-    Radius      float64   // 作用范围
-    Frequency   float64   // 振动频率
-    Phase       float64   // 相位角
+    // 量子状态
+    quantumStates map[WuXingPhase]*core.QuantumState
 }
 
 // NewWuXingFlow 创建五行流模型
@@ -80,7 +68,8 @@ func NewWuXingFlow() *WuXingFlow {
     wx := &WuXingFlow{
         BaseFlowModel:  NewBaseFlowModel(ModelWuXing, MaxPhaseEnergy*5),
         phaseEnergies:  make(map[WuXingPhase]float64),
-        fieldEffects:   make(map[WuXingPhase]*FieldEffect),
+        phaseFields:    make(map[WuXingPhase]*core.Field),
+        quantumStates:  make(map[WuXingPhase]*core.QuantumState),
     }
     
     wx.initializePhases()
@@ -92,18 +81,22 @@ func NewWuXingFlow() *WuXingFlow {
 
 // initializePhases 初始化相位
 func (wx *WuXingFlow) initializePhases() {
-    // 初始化各相位能量
+    // 初始化各相位
     for phase := Wood; phase <= Water; phase++ {
+        // 能量初始化
         wx.phaseEnergies[phase] = BalancePoint
         
-        // 初始化场效应
-        wx.fieldEffects[phase] = &FieldEffect{
-            Strength:  1.0,
-            Radius:    10.0,
-            Frequency: 2 * math.Pi / float64(24*time.Hour),
-            Phase:     float64(phase) * 2 * math.Pi / 5,
-        }
+        // 场初始化
+        wx.phaseFields[phase] = core.NewField()
+        wx.phaseFields[phase].SetStrength(1.0)
+        
+        // 量子态初始化
+        wx.quantumStates[phase] = core.NewQuantumState()
+        wx.quantumStates[phase].SetPhase(float64(phase) * 2 * math.Pi / 5)
     }
+    
+    // 更新状态属性
+    wx.updateStateProperties()
 }
 
 // initializeRelations 初始化关系
@@ -131,7 +124,7 @@ func (wx *WuXingFlow) initializeRelations() {
 
 // runCycle 运行五行周期
 func (wx *WuXingFlow) runCycle() {
-    ticker := time.NewTicker(time.Hour)
+    ticker := time.NewTicker(time.Second)
     defer ticker.Stop()
 
     for {
@@ -149,38 +142,31 @@ func (wx *WuXingFlow) processCycle() {
     wx.mu.Lock()
     defer wx.mu.Unlock()
 
-    now := time.Now()
-    
-    // 更新场效应
-    wx.updateFieldEffects(now)
+    // 处理量子态演化
+    wx.evolveQuantumStates()
     
     // 处理相互作用
     wx.processInteractions()
     
-    // 能量平衡
+    // 更新场效应
+    wx.updateFields()
+    
+    // 平衡能量
     wx.balanceEnergies()
     
-    wx.cycleControl.lastCycle = now
+    // 更新状态
+    wx.updateStateProperties()
 }
 
-// updateFieldEffects 更新场效应
-func (wx *WuXingFlow) updateFieldEffects(t time.Time) {
-    elapsed := t.Sub(wx.cycleControl.lastCycle).Seconds()
-    
-    for phase, effect := range wx.fieldEffects {
-        // 使用量子场论的波函数概念
-        // ψ(t) = A * e^(-iωt)
-        omega := effect.Frequency
-        amplitude := effect.Strength
-        
-        // 计算场强度
-        effect.Strength = amplitude * math.Cos(omega*elapsed + effect.Phase)
+// evolveQuantumStates 演化量子态
+func (wx *WuXingFlow) evolveQuantumStates() {
+    for phase, state := range wx.quantumStates {
+        // 应用时间演化算子
+        state.Evolve(time.Second)
         
         // 更新相位能量
-        energy := wx.phaseEnergies[phase]
-        fieldContribution := effect.Strength * CycleStrength
-        wx.phaseEnergies[phase] = math.Max(0, math.Min(MaxPhaseEnergy,
-            energy + fieldContribution))
+        probability := state.GetProbability()
+        wx.phaseEnergies[phase] = probability * MaxPhaseEnergy
     }
 }
 
@@ -190,16 +176,15 @@ func (wx *WuXingFlow) processInteractions() {
         sourceEnergy := wx.phaseEnergies[relation.Source]
         targetEnergy := wx.phaseEnergies[relation.Target]
         
-        // 计算作用强度
-        interactionStrength := wx.calculateInteractionStrength(
-            sourceEnergy, targetEnergy, relation)
+        // 计算相互作用强度
+        strength := wx.calculateInteractionStrength(sourceEnergy, targetEnergy, relation)
         
         // 应用相互作用
-        wx.applyInteraction(relation, interactionStrength)
+        wx.applyInteraction(relation, strength)
     }
 }
 
-// calculateInteractionStrength 计算作用强度
+// calculateInteractionStrength 计算相互作用强度
 func (wx *WuXingFlow) calculateInteractionStrength(
     sourceEnergy, targetEnergy float64,
     relation PhaseRelation,
@@ -208,18 +193,16 @@ func (wx *WuXingFlow) calculateInteractionStrength(
     energyDiff := sourceEnergy - targetEnergy
     baseStrength := relation.Strength * math.Tanh(energyDiff/BalancePoint)
     
-    // 考虑场效应
-    sourceField := wx.fieldEffects[relation.Source]
-    fieldFactor := math.Abs(sourceField.Strength)
+    // 考虑量子态的相干性
+    sourceState := wx.quantumStates[relation.Source]
+    targetState := wx.quantumStates[relation.Target]
+    coherence := core.CalculateCoherence(sourceState, targetState)
     
-    return baseStrength * fieldFactor
+    return baseStrength * coherence
 }
 
 // applyInteraction 应用相互作用
-func (wx *WuXingFlow) applyInteraction(
-    relation PhaseRelation,
-    strength float64,
-) {
+func (wx *WuXingFlow) applyInteraction(relation PhaseRelation, strength float64) {
     switch relation.Type {
     case Generate:
         // 相生：能量转移
@@ -243,22 +226,41 @@ func (wx *WuXingFlow) applyInteraction(
     }
 }
 
-// balanceEnergies 平衡能量
-func (wx *WuXingFlow) balanceEnergies() {
+// updateFields 更新场效应
+func (wx *WuXingFlow) updateFields() {
+    for phase, energy := range wx.phaseEnergies {
+        field := wx.phaseFields[phase]
+        
+        // 更新场强度
+        normalizedEnergy := energy / MaxPhaseEnergy
+        field.SetStrength(normalizedEnergy)
+        
+        // 应用场效应
+        wx.corePhysics.ApplyField(field)
+    }
+}
+
+// updateStateProperties 更新状态属性
+func (wx *WuXingFlow) updateStateProperties() {
+    // 更新总能量
     var totalEnergy float64
     for _, energy := range wx.phaseEnergies {
         totalEnergy += energy
     }
+    wx.state.Energy = totalEnergy
     
-    // 计算平均能量
-    avgEnergy := totalEnergy / 5
-    
-    // 应用能量平衡
-    for phase := range wx.phaseEnergies {
-        diff := wx.phaseEnergies[phase] - avgEnergy
-        if math.Abs(diff) > BalancePoint {
-            adjustment := diff * 0.1 // 渐进调整
-            wx.phaseEnergies[phase] -= adjustment
-        }
+    // 更新相位属性
+    for phase, energy := range wx.phaseEnergies {
+        wx.state.Properties[phase.String()] = energy
     }
+    
+    // 更新相位
+    wx.state.Phase = PhaseWuXing
+}
+
+// GetPhaseEnergy 获取相位能量
+func (wx *WuXingFlow) GetPhaseEnergy(phase WuXingPhase) float64 {
+    wx.mu.RLock()
+    defer wx.mu.RUnlock()
+    return wx.phaseEnergies[phase]
 }
