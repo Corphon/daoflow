@@ -29,6 +29,15 @@ type FlowSystem struct {
     Phase      float64            // 系统相位
 }
 
+// StateTransition 状态转换定义
+type StateTransition struct {
+    FromState    string              // 转换前状态
+    ToState      string              // 转换后状态
+    Timestamp    time.Time           // 转换发生时间
+    Properties   map[string]float64  // 转换相关的属性值
+    Reason       string              // 转换原因
+}
+
 // IntegrateFlow 集成模型
 type IntegrateFlow struct {
     *BaseFlowModel
