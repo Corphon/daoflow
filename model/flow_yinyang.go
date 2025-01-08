@@ -4,7 +4,6 @@ package model
 
 import (
     "math"
-    "sync"
     "time"
 
     "github.com/Corphon/daoflow/core"
@@ -12,168 +11,240 @@ import (
 
 // YinYangConstants 阴阳常数
 const (
-    MaxImbalance    = 0.3   // 最大失衡度 (30%)
-    NeutralPoint    = 0.5   // 中性点
-    CycleInterval   = 12.0  // 周期间隔(小时)
-    TransformThreshold = 0.8 // 转化阈值
+    YinYangPeriod     = 2 * math.Pi       // 阴阳周期
+    YinYangThreshold  = 0.5               // 阴阳转换阈值
+    YinEntropyFactor  = 0.3               // 阴熵因子
+    YangEntropyFactor = 0.7               // 阳熵因子
 )
 
 // YinYangFlow 阴阳模型
 type YinYangFlow struct {
     *BaseFlowModel
+
+    // 阴阳特有状态
+    yinEnergy  float64                 // 阴能量
+    yangEnergy float64                 // 阳能量
+    balance    float64                 // 平衡度
     
-    // 阴阳特性
-    yinRatio  float64 // 阴性比例 (0-1)
-    yangRatio float64 // 阳性比例 (0-1)
+    // 量子场组件
+    yinField   *core.Field            // 阴场
+    yangField  *core.Field            // 阳场
     
-    // 周期控制
-    cyclePeriod float64     // 周期长度
-    phaseOffset float64     // 相位偏移
-    lastCycle   time.Time   // 上次周期时间
-    
-    // 振动特性
-    waveAmplitude float64   // 波动幅度
-    waveFrequency float64   // 波动频率
-    damping       float64   // 阻尼系数
+    // 量子态组件
+    yinState   *core.QuantumState     // 阴量子态
+    yangState  *core.QuantumState     // 阳量子态
 }
 
-// NewYinYangFlow 创建阴阳流模型
+// NewYinYangFlow 创建阴阳模型
 func NewYinYangFlow() *YinYangFlow {
+    base := NewBaseFlowModel(ModelYinYang, 200.0)
+    
     yy := &YinYangFlow{
-        BaseFlowModel: NewBaseFlowModel(ModelYinYang, 100.0),
-        yinRatio:     0.5,  // 初始平衡
-        yangRatio:    0.5,
-        cyclePeriod:  CycleInterval * float64(time.Hour),
-        phaseOffset:  0,
-        waveAmplitude: 0.1, // 10%波动
-        waveFrequency: 2 * math.Pi / CycleInterval,
-        damping:      0.05,
+        BaseFlowModel: base,
+        yinField:      core.NewField(),
+        yangField:     core.NewField(),
+        yinState:      core.NewQuantumState(),
+        yangState:     core.NewQuantumState(),
     }
-    
-    // 初始化状态属性
-    yy.state.Properties["yinRatio"] = yy.yinRatio
-    yy.state.Properties["yangRatio"] = yy.yangRatio
+
+    // 初始化状态
     yy.state.Phase = PhaseYinYang
+    yy.state.Nature = NatureYang // 默认从阳开始
+    yy.state.Properties["balance"] = 0.5
     
-    go yy.runCycle()
     return yy
 }
 
-// runCycle 运行阴阳周期
-func (yy *YinYangFlow) runCycle() {
-    ticker := time.NewTicker(time.Minute)
-    defer ticker.Stop()
-
-    for {
-        select {
-        case <-yy.done:
-            return
-        case <-ticker.C:
-            yy.updateCycle()
-        }
-    }
-}
-
-// updateCycle 更新阴阳周期
-func (yy *YinYangFlow) updateCycle() {
+// Transform 阴阳转换实现
+func (yy *YinYangFlow) Transform(pattern TransformPattern) error {
     yy.mu.Lock()
     defer yy.mu.Unlock()
+
+    if !yy.running {
+        return NewModelError(ErrCodeOperation, "model not running", nil)
+    }
+
+    // 计算阴阳转换
+    switch pattern {
+    case PatternNormal:
+        yy.naturalTransform()
+    case PatternForward:
+        yy.forwardTransform()
+    case PatternReverse:
+        yy.reverseTransform()
+    case PatternBalance:
+        yy.balanceTransform()
+    case PatternMutate:
+        yy.mutateTransform()
+    default:
+        return NewModelError(ErrCodeOperation, "invalid transform pattern", nil)
+    }
+
+    // 更新量子态
+    yy.updateQuantumStates()
     
-    now := time.Now()
-    elapsed := now.Sub(yy.lastCycle).Hours()
-    
-    // 使用量子谐振子模型计算阴阳变化
-    // ψ(t) = A * e^(-γt) * cos(ωt + φ)
-    amplitude := yy.waveAmplitude * math.Exp(-yy.damping*elapsed)
-    phase := yy.waveFrequency*elapsed + yy.phaseOffset
-    oscillation := amplitude * math.Cos(phase)
-    
-    // 更新阴阳比例
-    baseRatio := NeutralPoint + oscillation
-    yy.yinRatio = math.Max(0, math.Min(1, baseRatio))
-    yy.yangRatio = 1 - yy.yinRatio
-    
-    // 更新物理效应
-    yy.applyPhysicalEffects()
+    // 更新场
+    yy.updateFields()
     
     // 更新状态
-    yy.updateState()
-    
-    yy.lastCycle = now
+    yy.updateModelState()
+
+    return nil
 }
 
-// applyPhysicalEffects 应用物理效应
-func (yy *YinYangFlow) applyPhysicalEffects() {
-    // 将阴阳比例转换为物理量
-    // 使用核心物理系统进行计算
-    physicsState := &core.PhysicsState{
-        Temperature: yy.yangRatio * 100,  // 阳性对应温度
-        Pressure:    yy.yinRatio * 100,   // 阴性对应压力
-        Density:     yy.state.Energy / 100,
-        Entropy:     yy.calculateEntropy(),
-    }
+// naturalTransform 自然转换
+func (yy *YinYangFlow) naturalTransform() {
+    // 使用量子态演化
+    phase := yy.quantum.GetPhase()
+    newPhase := math.Mod(phase + YinYangPeriod/360.0, YinYangPeriod)
+    yy.quantum.SetPhase(newPhase)
     
-    // 应用物理状态
-    yy.corePhysics.ApplyState(physicsState)
+    // 计算能量分配
+    totalEnergy := yy.state.Energy
+    ratio := (math.Sin(newPhase) + 1) / 2 // 转换到 [0,1] 区间
+    
+    yy.yinEnergy = totalEnergy * (1 - ratio)
+    yy.yangEnergy = totalEnergy * ratio
 }
 
-// calculateEntropy 计算系统熵
-func (yy *YinYangFlow) calculateEntropy() float64 {
-    // 使用信息熵公式: S = -k * (p_yin * ln(p_yin) + p_yang * ln(p_yang))
-    if yy.yinRatio == 0 || yy.yangRatio == 0 {
-        return 0
-    }
-    
-    k := 1.0 // 玻尔兹曼常数的类比
-    entropy := -k * (
-        yy.yinRatio * math.Log(yy.yinRatio) +
-        yy.yangRatio * math.Log(yy.yangRatio),
-    )
-    
-    return entropy
-}
-
-// updateState 更新状态
-func (yy *YinYangFlow) updateState() {
-    yy.state.Properties["yinRatio"] = yy.yinRatio
-    yy.state.Properties["yangRatio"] = yy.yangRatio
-    yy.state.Properties["entropy"] = yy.calculateEntropy()
-    
-    // 根据阴阳比例确定性质
-    if math.Abs(yy.yinRatio - yy.yangRatio) < 0.1 {
-        yy.state.Nature = NatureBalance
-    } else if yy.yinRatio > yy.yangRatio {
-        yy.state.Nature = NatureYin
+// forwardTransform 顺序转换
+func (yy *YinYangFlow) forwardTransform() {
+    if yy.state.Nature == NatureYin {
+        yy.transformToYang()
     } else {
+        yy.transformToYin()
+    }
+}
+
+// reverseTransform 逆序转换
+func (yy *YinYangFlow) reverseTransform() {
+    if yy.state.Nature == NatureYin {
+        yy.transformToYin()
+    } else {
+        yy.transformToYang()
+    }
+}
+
+// balanceTransform 平衡转换
+func (yy *YinYangFlow) balanceTransform() {
+    totalEnergy := yy.state.Energy
+    yy.yinEnergy = totalEnergy * 0.5
+    yy.yangEnergy = totalEnergy * 0.5
+    yy.balance = 1.0
+}
+
+// mutateTransform 变异转换
+func (yy *YinYangFlow) mutateTransform() {
+    // 使用量子涨落
+    fluctuation := yy.quantum.GetFluctuation()
+    
+    // 计算新的能量分配
+    totalEnergy := yy.state.Energy
+    ratio := 0.5 + fluctuation
+    
+    yy.yinEnergy = totalEnergy * ratio
+    yy.yangEnergy = totalEnergy * (1 - ratio)
+}
+
+// transformToYin 转换到阴
+func (yy *YinYangFlow) transformToYin() {
+    totalEnergy := yy.state.Energy
+    transferEnergy := totalEnergy * 0.2 // 每次转换20%
+    
+    yy.yinEnergy += transferEnergy
+    yy.yangEnergy -= transferEnergy
+    
+    if yy.yinEnergy > yy.yangEnergy {
+        yy.state.Nature = NatureYin
+    }
+}
+
+// transformToYang 转换到阳
+func (yy *YinYangFlow) transformToYang() {
+    totalEnergy := yy.state.Energy
+    transferEnergy := totalEnergy * 0.2 // 每次转换20%
+    
+    yy.yangEnergy += transferEnergy
+    yy.yinEnergy -= transferEnergy
+    
+    if yy.yangEnergy > yy.yinEnergy {
         yy.state.Nature = NatureYang
     }
 }
 
-// Transform 实现阴阳转化
-func (yy *YinYangFlow) Transform(pattern TransformPattern) error {
-    yy.mu.Lock()
-    defer yy.mu.Unlock()
+// updateQuantumStates 更新量子态
+func (yy *YinYangFlow) updateQuantumStates() {
+    totalEnergy := yy.state.Energy
     
-    if pattern.TransformRatio > TransformThreshold {
-        // 阴阳互转
-        yy.yinRatio, yy.yangRatio = yy.yangRatio, yy.yinRatio
-        
-        // 相位调整
-        yy.phaseOffset = math.Pi - yy.phaseOffset
-        
-        // 更新物理效应
-        yy.applyPhysicalEffects()
-        
-        // 更新状态
-        yy.updateState()
+    // 更新阴态
+    yinProb := yy.yinEnergy / totalEnergy
+    yy.yinState.SetProbability(yinProb)
+    yy.yinState.Evolve("yin")
+    
+    // 更新阳态
+    yangProb := yy.yangEnergy / totalEnergy
+    yy.yangState.SetProbability(yangProb)
+    yy.yangState.Evolve("yang")
+    
+    // 更新整体量子态
+    yy.quantum.SetProbability((yinProb + yangProb) / 2)
+    yy.quantum.Evolve("yinyang")
+}
+
+// updateFields 更新场
+func (yy *YinYangFlow) updateFields() {
+    totalEnergy := yy.state.Energy
+    
+    // 更新阴场
+    yy.yinField.SetStrength(yy.yinEnergy / totalEnergy)
+    yy.yinField.SetPhase(yy.quantum.GetPhase())
+    yy.yinField.Evolve()
+    
+    // 更新阳场
+    yy.yangField.SetStrength(yy.yangEnergy / totalEnergy)
+    yy.yangField.SetPhase(yy.quantum.GetPhase() + math.Pi) // 反相位
+    yy.yangField.Evolve()
+    
+    // 更新统一场
+    fieldStrength := (yy.yinField.GetStrength() + yy.yangField.GetStrength()) / 2
+    yy.field.SetStrength(fieldStrength)
+    yy.field.Evolve()
+}
+
+// updateModelState 更新模型状态
+func (yy *YinYangFlow) updateModelState() {
+    // 计算平衡度
+    totalEnergy := yy.state.Energy
+    if totalEnergy > 0 {
+        yinRatio := yy.yinEnergy / totalEnergy
+        yangRatio := yy.yangEnergy / totalEnergy
+        yy.balance = 1 - math.Abs(yinRatio - yangRatio)
     }
-    
-    return nil
+
+    // 更新状态属性
+    yy.state.Properties["yinEnergy"] = yy.yinEnergy
+    yy.state.Properties["yangEnergy"] = yy.yangEnergy
+    yy.state.Properties["balance"] = yy.balance
+    yy.state.Properties["phase"] = yy.quantum.GetPhase()
+    yy.state.UpdateTime = time.Now()
 }
 
 // GetYinYangRatio 获取阴阳比例
 func (yy *YinYangFlow) GetYinYangRatio() (float64, float64) {
     yy.mu.RLock()
     defer yy.mu.RUnlock()
-    return yy.yinRatio, yy.yangRatio
+    
+    totalEnergy := yy.state.Energy
+    if totalEnergy <= 0 {
+        return 0.5, 0.5
+    }
+    
+    return yy.yinEnergy/totalEnergy, yy.yangEnergy/totalEnergy
+}
+
+// GetBalance 获取平衡度
+func (yy *YinYangFlow) GetBalance() float64 {
+    yy.mu.RLock()
+    defer yy.mu.RUnlock()
+    return yy.balance
 }
