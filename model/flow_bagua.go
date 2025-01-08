@@ -25,78 +25,57 @@ type Trigram uint8
 const (
     Qian Trigram = iota // 乾 ☰
     Kun                 // 坤 ☷
-    Zhen                // 震 ☳
-    Xun                 // 巽 ☴
-    Kan                 // 坎 ☵
-    Li                  // 离 ☲
-    Gen                 // 艮 ☶
-    Dui                 // 兑 ☱
+    Zhen               // 震 ☳
+    Xun                // 巽 ☴
+    Kan                // 坎 ☵
+    Li                 // 离 ☲
+    Gen                // 艮 ☶
+    Dui                // 兑 ☱
 )
 
 // TrigramAttributes 卦象属性
 type TrigramAttributes struct {
     Lines      [TrigramLines]bool // 爻线
-    Direction  float64           // 方位角度
-    Element    WuXingPhase       // 关联五行
-    Nature     Nature            // 阴阳属性
-    Energy     float64           // 能量值
-    Potential  float64           // 势能
+    Direction  float64            // 方位角度
+    Element    WuXingPhase        // 关联五行
+    Nature     Nature             // 阴阳属性
+    Energy     float64            // 能量值
 }
 
 // BaGuaFlow 八卦模型
 type BaGuaFlow struct {
     *BaseFlowModel
+    mu          sync.RWMutex
     
     // 卦象系统
     trigrams    map[Trigram]*TrigramAttributes
+    current     Trigram
     
-    // 场态
-    fieldMatrix [][]float64      // 场分布矩阵
-    potential   [][]float64      // 势场分布
+    // 关联系统
+    wuxing      *WuXingFlow
     
-    // 变化记录
-    mutations   map[Trigram][]Mutation
-    
-    // 外部关联
-    wuxing     *WuXingFlow    // 五行关联
-    yinyang    *YinYangFlow   // 阴阳关联
-}
-
-// Mutation 变卦记录
-type Mutation struct {
-    From      Trigram
-    To        Trigram
-    Time      time.Time
-    Cause     string
-    Energy    float64
+    // 核心组件
+    coreField   *core.Field
+    coreState   *core.QuantumState
 }
 
 // NewBaGuaFlow 创建八卦流模型
-func NewBaGuaFlow(wx *WuXingFlow, yy *YinYangFlow) *BaGuaFlow {
+func NewBaGuaFlow(wx *WuXingFlow) *BaGuaFlow {
     bg := &BaGuaFlow{
         BaseFlowModel: NewBaseFlowModel(ModelBaGua, 800.0), // 8卦*100能量
-        trigrams:      make(map[Trigram]*TrigramAttributes),
-        fieldMatrix:   make([][]float64, 8),
-        potential:     make([][]float64, 8),
-        mutations:     make(map[Trigram][]Mutation),
+        trigrams:     make(map[Trigram]*TrigramAttributes),
         wuxing:       wx,
-        yinyang:      yy,
-    }
-    
-    // 初始化场矩阵
-    for i := range bg.fieldMatrix {
-        bg.fieldMatrix[i] = make([]float64, 8)
-        bg.potential[i] = make([]float64, 8)
+        coreField:    core.NewField(),
+        coreState:    core.NewQuantumState(),
     }
     
     bg.initializeTrigrams()
-    go bg.runFieldCalculation()
     return bg
 }
 
 // initializeTrigrams 初始化卦象
 func (bg *BaGuaFlow) initializeTrigrams() {
-    // 定义卦象配置
+    // 卦象配置
     configs := map[Trigram]struct {
         lines     [TrigramLines]bool
         direction float64
@@ -120,162 +99,101 @@ func (bg *BaGuaFlow) initializeTrigrams() {
             Direction: config.direction,
             Element:   config.element,
             Nature:    config.nature,
-            Energy:    BasePotential,
-            Potential: calculateInitialPotential(config.direction),
+            Energy:    100.0, // 初始能量均匀分布
         }
     }
 }
 
-// calculateInitialPotential 计算初始势能
-func calculateInitialPotential(direction float64) float64 {
-    // 使用余弦函数创建周期性势能分布
-    return BasePotential * (1 + math.Cos(direction*math.Pi/180.0))
+// GetCurrentTrigram 获取当前卦象
+func (bg *BaGuaFlow) GetCurrentTrigram() Trigram {
+    bg.mu.RLock()
+    defer bg.mu.RUnlock()
+    return bg.current
 }
 
-// runFieldCalculation 运行场计算
-func (bg *BaGuaFlow) runFieldCalculation() {
-    ticker := time.NewTicker(time.Second)
-    defer ticker.Stop()
-
-    for {
-        select {
-        case <-bg.done:
-            return
-        case <-ticker.C:
-            bg.updateField()
-        }
-    }
+// GetTrigramAttributes 获取卦象属性
+func (bg *BaGuaFlow) GetTrigramAttributes(t Trigram) *TrigramAttributes {
+    bg.mu.RLock()
+    defer bg.mu.RUnlock()
+    return bg.trigrams[t]
 }
 
-// updateField 更新场分布
-func (bg *BaGuaFlow) updateField() {
+// Transform 实现状态转换
+func (bg *BaGuaFlow) Transform(pattern TransformPattern) error {
     bg.mu.Lock()
     defer bg.mu.Unlock()
-    
-    // 计算场分布
-    for i, trigram := range bg.trigrams {
-        // 计算场强度
-        fieldStrength := bg.calculateFieldStrength(trigram)
-        
-        // 更新场矩阵
-        x := int(trigram.Direction / OctantAngle)
-        y := int(trigram.Energy / BasePotential)
-        if x < 8 && y < 8 {
-            bg.fieldMatrix[x][y] = fieldStrength
-            
-            // 更新势场
-            bg.potential[x][y] = bg.calculatePotential(trigram)
-        }
-        
-        // 检查变卦条件
-        if bg.shouldMutate(trigram) {
-            bg.mutate(i)
-        }
-    }
-}
 
-// calculateFieldStrength 计算场强度
-func (bg *BaGuaFlow) calculateFieldStrength(attr *TrigramAttributes) float64 {
-    // 使用量子场论的波函数叠加
-    psi := complex(attr.Energy/100.0, attr.Potential/BasePotential)
+    // 计算量子态演化
+    bg.coreState.Evolve(time.Second)
     
-    // |ψ|² 给出概率密度
-    return math.Pow(cmplx.Abs(psi), 2)
-}
-
-// calculatePotential 计算势能
-func (bg *BaGuaFlow) calculatePotential(attr *TrigramAttributes) float64 {
-    // 考虑五行和阴阳影响
-    wuxingContribution := 0.0
+    // 更新场强度
+    probability := bg.coreState.GetProbability()
+    bg.coreField.SetStrength(probability)
+    
+    // 计算新卦象
+    newTrigram := bg.calculateNextTrigram(pattern)
+    
+    // 更新能量分布
+    bg.redistributeEnergy(newTrigram)
+    
+    // 同步五行系统
     if bg.wuxing != nil {
-        if energy, err := bg.wuxing.GetElementStrength(attr.Element); err == nil {
-            wuxingContribution = float64(energy) / 100.0
-        }
+        currentAttrs := bg.trigrams[bg.current]
+        newAttrs := bg.trigrams[newTrigram]
+        bg.wuxing.AdjustPhaseEnergy(currentAttrs.Element, -currentAttrs.Energy * 0.5)
+        bg.wuxing.AdjustPhaseEnergy(newAttrs.Element, newAttrs.Energy * 0.5)
     }
     
-    yinyangContribution := 0.0
-    if bg.yinyang != nil {
-        yin, yang := bg.yinyang.GetRatio()
-        if attr.Nature == NatureYin {
-            yinyangContribution = yin
-        } else {
-            yinyangContribution = yang
-        }
-    }
-    
-    // 合成势能
-    return attr.Potential * (1 + wuxingContribution) * (1 + yinyangContribution)
+    bg.current = newTrigram
+    return nil
 }
 
-// shouldMutate 判断是否应该变卦
-func (bg *BaGuaFlow) shouldMutate(attr *TrigramAttributes) bool {
-    // 计算变化趋势
-    energyRatio := attr.Energy / (BasePotential * 8)
-    potentialRatio := attr.Potential / (BasePotential * 2)
-    
-    // 使用统计力学的相变模型
-    transitionProbability := math.Exp(-(energyRatio * potentialRatio))
-    
-    return transitionProbability > MutationThreshold
+// calculateNextTrigram 计算下一个卦象
+func (bg *BaGuaFlow) calculateNextTrigram(pattern TransformPattern) Trigram {
+    // 基于量子态概率分布计算转换
+    prob := bg.coreState.GetProbability()
+    if prob > MutationThreshold {
+        // 阴阳变换规则
+        attrs := bg.trigrams[bg.current]
+        lines := attrs.Lines
+        for i := 0; i < TrigramLines; i++ {
+            if math.Rand.Float64() < ResonanceRate {
+                lines[i] = !lines[i]
+            }
+        }
+        return bg.findTrigramByLines(lines)
+    }
+    return bg.current
 }
 
-// mutate 执行变卦
-func (bg *BaGuaFlow) mutate(from Trigram) {
-    // 寻找最适合的目标卦象
-    var bestTarget Trigram
-    maxResonance := 0.0
+// redistributeEnergy 重新分配能量
+func (bg *BaGuaFlow) redistributeEnergy(newTrigram Trigram) {
+    oldAttrs := bg.trigrams[bg.current]
+    newAttrs := bg.trigrams[newTrigram]
     
-    fromAttr := bg.trigrams[from]
+    transferEnergy := oldAttrs.Energy * ResonanceRate
+    oldAttrs.Energy -= transferEnergy
+    newAttrs.Energy += transferEnergy
     
-    for to, toAttr := range bg.trigrams {
-        if to == from {
-            continue
-        }
-        
-        // 计算共振度
-        resonance := bg.calculateResonance(fromAttr, toAttr)
-        if resonance > maxResonance {
-            maxResonance = resonance
-            bestTarget = to
-        }
-    }
-    
-    // 记录变卦
-    if maxResonance > ResonanceRate {
-        mutation := Mutation{
-            From:   from,
-            To:     bestTarget,
-            Time:   time.Now(),
-            Cause:  "field resonance",
-            Energy: fromAttr.Energy,
-        }
-        
-        bg.mutations[from] = append(bg.mutations[from], mutation)
-        
-        // 能量转换
-        bg.trigrams[bestTarget].Energy += fromAttr.Energy * maxResonance
-        fromAttr.Energy *= (1 - maxResonance)
-    }
+    // 更新总能量
+    bg.state.Energy = bg.calculateTotalEnergy()
 }
 
-// calculateResonance 计算共振度
-func (bg *BaGuaFlow) calculateResonance(from, to *TrigramAttributes) float64 {
-    // 计算方向共振
-    directionDiff := math.Abs(from.Direction - to.Direction)
-    if directionDiff > 180 {
-        directionDiff = 360 - directionDiff
+// calculateTotalEnergy 计算总能量
+func (bg *BaGuaFlow) calculateTotalEnergy() float64 {
+    var total float64
+    for _, attrs := range bg.trigrams {
+        total += attrs.Energy
     }
-    directionResonance := 1 - (directionDiff / 180.0)
-    
-    // 计算能量共振
-    energyRatio := math.Min(from.Energy, to.Energy) / math.Max(from.Energy, to.Energy)
-    
-    // 计算属性共振
-    natureResonance := 0.5
-    if from.Nature == to.Nature {
-        natureResonance = 1.0
+    return total
+}
+
+// findTrigramByLines 根据爻线找到对应卦象
+func (bg *BaGuaFlow) findTrigramByLines(lines [TrigramLines]bool) Trigram {
+    for t, attrs := range bg.trigrams {
+        if attrs.Lines == lines {
+            return t
+        }
     }
-    
-    // 综合共振度
-    return (directionResonance + energyRatio + natureResonance) / 3
+    return bg.current // 如果未找到匹配则保持当前卦象
 }
