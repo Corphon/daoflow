@@ -8,8 +8,8 @@ import (
     "time"
     "context"
 
-    "github.com/Corphon/daoframe/model"
-    "github.com/Corphon/daoframe/core"
+    "github.com/Corphon/daoflow/model"
+    "github.com/Corphon/daoflow/core"
 )
 
 // EvolutionConstants 演化常数
