@@ -78,7 +78,7 @@ func NewIntegrateFlow() *IntegrateFlow {
     bg := NewBaGuaFlow(wx, yy)
     gz := NewGanZhiFlow(wx, yy)
     
-    if := &IntegrateFlow{
+    iflow := &IntegrateFlow{
         BaseFlowModel: NewBaseFlowModel(ModelIntegrate, SystemCapacity),
         yinyang:      yy,
         wuxing:       wx,
@@ -88,8 +88,8 @@ func NewIntegrateFlow() *IntegrateFlow {
         transitions:  make(chan StateTransition, 100),
     }
     
-    go if.runIntegration()
-    return if
+    go iflow.runIntegration()
+    return iflow
 }
 
 // newUnifiedField 创建统一场
@@ -113,74 +113,74 @@ func newUnifiedField() *UnifiedField {
 }
 
 // runIntegration 运行系统集成
-func (if *IntegrateFlow) runIntegration() {
+func (iflow *IntegrateFlow) runIntegration() {
     ticker := time.NewTicker(IntegrationCycle)
     defer ticker.Stop()
 
     for {
         select {
-        case <-if.done:
+        case <-iflow.done:
             return
         case <-ticker.C:
-            if.integrate()
-        case transition := <-if.transitions:
-            if.handleTransition(transition)
+            iflow.integrate()
+        case transition := <-iflow.transitions:
+            iflow.handleTransition(transition)
         }
     }
 }
 
 // integrate 执行系统集成
-func (if *IntegrateFlow) integrate() {
-    if.mu.Lock()
-    defer if.mu.Unlock()
+func (iflow *IntegrateFlow) integrate() {
+    iflow.mu.Lock()
+    defer iflow.mu.Unlock()
 
     // 收集子系统状态
-    yyState := if.yinyang.GetState()
-    wxState := if.wuxing.GetState()
-    bgState := if.bagua.GetState()
-    gzState := if.ganzhi.GetState()
+    yyState := iflow.yinyang.GetState()
+    wxState := iflow.wuxing.GetState()
+    bgState := iflow.bagua.GetState()
+    gzState := iflow.ganzhi.GetState()
 
     // 计算统一场效应
-    fieldEffect := if.calculateFieldEffect(yyState, wxState, bgState, gzState)
+    fieldEffect := iflow.calculateFieldEffect(yyState, wxState, bgState, gzState)
     
     // 更新系统状态
-    if.updateSystemState(fieldEffect)
+    iflow.updateSystemState(fieldEffect)
     
     // 执行能量再分配
-    if.redistributeEnergy()
+    iflow.redistributeEnergy()
     
     // 更新相干性
-    if.updateCoherence()
+    iflow.updateCoherence()
     
     // 记录状态
-    if.recordState()
+    iflow.recordState()
 }
 
 // calculateFieldEffect 计算统一场效应
-func (if *IntegrateFlow) calculateFieldEffect(
+func (iflow *IntegrateFlow) calculateFieldEffect(
     yyState, wxState, bgState, gzState ModelState,
 ) float64 {
     // 使用量子场论计算场效应
     contributions := make([]complex128, SystemLayers)
     
     // 计算各系统的波函数贡献
-    contributions[0] = complex(yyState.Energy/100.0, if.unifiedField.phases[0])
+    contributions[0] = complex(yyState.Energy/100.0, iflow.unifiedField.phases[0])
     
     wxContribution := complex(0, 0)
     for _, e := range wxState.Properties {
-        wxContribution += complex(e/100.0, if.unifiedField.phases[1])
+        wxContribution += complex(e/100.0, iflow.unifiedField.phases[1])
     }
     contributions[1] = wxContribution / complex(5, 0)
     
     bgContribution := complex(0, 0)
     for _, e := range bgState.Properties {
-        bgContribution += complex(e/100.0, if.unifiedField.phases[2])
+        bgContribution += complex(e/100.0, iflow.unifiedField.phases[2])
     }
     contributions[2] = bgContribution / complex(8, 0)
     
     gzContribution := complex(0, 0)
     for _, e := range gzState.Properties {
-        gzContribution += complex(e/100.0, if.unifiedField.phases[3])
+        gzContribution += complex(e/100.0, iflow.unifiedField.phases[3])
     }
     contributions[3] = gzContribution / complex(22, 0)  // 10天干+12地支
 
@@ -188,7 +188,7 @@ func (if *IntegrateFlow) calculateFieldEffect(
     var totalField complex128
     for i, contribution := range contributions {
         for j := 0; j < SystemLayers; j++ {
-            totalField += contribution * complex(if.unifiedField.coupling[i][j], 0)
+            totalField += contribution * complex(iflow.unifiedField.coupling[i][j], 0)
         }
     }
     
@@ -196,66 +196,66 @@ func (if *IntegrateFlow) calculateFieldEffect(
 }
 
 // updateSystemState 更新系统状态
-func (if *IntegrateFlow) updateSystemState(fieldEffect float64) {
+func (iflow *IntegrateFlow) updateSystemState(fieldEffect float64) {
     // 更新系统能量
-    if.system.Energy = if.yinyang.GetState().Energy +
-                      if.wuxing.GetState().Energy +
-                      if.bagua.GetState().Energy +
-                      if.ganzhi.GetState().Energy
+    iflow.system.Energy = iflow.yinyang.GetState().Energy +
+                      iflow.wuxing.GetState().Energy +
+                      iflow.bagua.GetState().Energy +
+                      iflow.ganzhi.GetState().Energy
     
     // 计算系统熵
-    if.system.Entropy = if.calculateSystemEntropy()
+    iflow.system.Entropy = iflow.calculateSystemEntropy()
     
     // 计算和谐度
-    if.system.Harmony = if.calculateHarmony(fieldEffect)
+    iflow.system.Harmony = iflow.calculateHarmony(fieldEffect)
     
     // 计算平衡度
-    if.system.Balance = if.calculateBalance()
+    iflow.system.Balance = iflow.calculateBalance()
     
     // 计算相干度
-    if.system.Coherence = if.calculateCoherence()
+    iflow.system.Coherence = iflow.calculateCoherence()
     
     // 更新系统相位
-    if.system.Phase = if.calculateSystemPhase()
+    iflow.system.Phase = iflow.calculateSystemPhase()
 }
 
 // redistributeEnergy 重新分配能量
-func (if *IntegrateFlow) redistributeEnergy() {
-    if if.system.Balance < BalanceThreshold {
+func (iflow *IntegrateFlow) redistributeEnergy() {
+    if iflow.system.Balance < BalanceThreshold {
         // 需要重新平衡能量
-        avgEnergy := if.system.Energy / float64(SystemLayers)
+        avgEnergy := iflow.system.Energy / float64(SystemLayers)
         
         // 逐步调整能量
-        if.yinyang.AdjustEnergy(avgEnergy - if.yinyang.GetState().Energy)
-        if.wuxing.AdjustEnergy(avgEnergy - if.wuxing.GetState().Energy)
-        if.bagua.AdjustEnergy(avgEnergy - if.bagua.GetState().Energy)
-        if.ganzhi.AdjustEnergy(avgEnergy - if.ganzhi.GetState().Energy)
+        iflow.yinyang.AdjustEnergy(avgEnergy - iflow.yinyang.GetState().Energy)
+        iflow.wuxing.AdjustEnergy(avgEnergy - iflow.wuxing.GetState().Energy)
+        iflow.bagua.AdjustEnergy(avgEnergy - iflow.bagua.GetState().Energy)
+        iflow.ganzhi.AdjustEnergy(avgEnergy - iflow.ganzhi.GetState().Energy)
     }
 }
 
 // updateCoherence 更新相干性
-func (if *IntegrateFlow) updateCoherence() {
+func (iflow *IntegrateFlow) updateCoherence() {
     for i := 0; i < SystemLayers; i++ {
         for j := 0; j < SystemLayers; j++ {
             if i != j {
                 // 计算两个系统间的相干性
-                phase1 := if.unifiedField.phases[i]
-                phase2 := if.unifiedField.phases[j]
+                phase1 := iflow.unifiedField.phases[i]
+                phase2 := iflow.unifiedField.phases[j]
                 
                 // 使用量子相干性理论
                 coherence := math.Cos(phase1 - phase2)
-                if.unifiedField.coherence[i][j] = math.Abs(coherence)
+                iflow.unifiedField.coherence[i][j] = math.Abs(coherence)
             }
         }
     }
 }
 
 // calculateSystemPhase 计算系统总相位
-func (if *IntegrateFlow) calculateSystemPhase() float64 {
+func (iflow *IntegrateFlow) calculateSystemPhase() float64 {
     var totalPhase float64
     weights := []float64{0.3, 0.3, 0.2, 0.2} // 各系统权重
     
-    for i, phase := range if.unifiedField.phases {
+    for i, phase := range iflow.unifiedField.phases {
         totalPhase += phase * weights[i]
     }
     
@@ -263,11 +263,11 @@ func (if *IntegrateFlow) calculateSystemPhase() float64 {
 }
 
 // recordState 记录系统状态
-func (if *IntegrateFlow) recordState() {
+func (iflow *IntegrateFlow) recordState() {
     state := SystemState{
         Timestamp: time.Now(),
-        System:    if.system,
-        YinYang:   if.yinyang.GetState().Energy,
+        System:    iflow.system,
+        YinYang:   iflow.yinyang.GetState().Energy,
         WuXing:    make([]float64, 5),
         BaGua:     make([]float64, 8),
         GanZhi:    make([]float64, 22), // 10天干+12地支
@@ -275,16 +275,16 @@ func (if *IntegrateFlow) recordState() {
     
     // 记录五行能量分布
     for i := 0; i < 5; i++ {
-        state.WuXing[i] = if.wuxing.GetState().Properties[fmt.Sprintf("phase_%d", i)]
+        state.WuXing[i] = iflow.wuxing.GetState().Properties[fmt.Sprintf("phase_%d", i)]
     }
     
     // 记录八卦能量分布
     for i := 0; i < 8; i++ {
-        state.BaGua[i] = if.bagua.GetState().Properties[fmt.Sprintf("trigram_%d", i)]
+        state.BaGua[i] = iflow.bagua.GetState().Properties[fmt.Sprintf("trigram_%d", i)]
     }
     
     // 记录干支能量分布
-    gzState := if.ganzhi.GetState()
+    gzState := iflow.ganzhi.GetState()
     for i := 0; i < 10; i++ {
         state.GanZhi[i] = gzState.Properties[fmt.Sprintf("gan_%d", i)]
     }
@@ -292,5 +292,5 @@ func (if *IntegrateFlow) recordState() {
         state.GanZhi[i+10] = gzState.Properties[fmt.Sprintf("zhi_%d", i)]
     }
     
-    if.stateHistory = append(if.stateHistory, state)
+    if.stateHistory = append(iflow.stateHistory, state)
 }
