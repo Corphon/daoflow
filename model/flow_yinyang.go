@@ -27,14 +27,14 @@ type YinYangFlow struct {
     yangRatio float64 // 阳性比例 (0-1)
     
     // 周期控制
-    cyclePeriod float64       // 周期长度
-    phaseOffset float64       // 相位偏移
-    lastCycle   time.Time     // 上次周期时间
+    cyclePeriod float64     // 周期长度
+    phaseOffset float64     // 相位偏移
+    lastCycle   time.Time   // 上次周期时间
     
-    // 波动特性
-    waveAmplitude float64    // 波动幅度
-    waveFrequency float64    // 波动频率
-    damping      float64     // 阻尼系数
+    // 振动特性
+    waveAmplitude float64   // 波动幅度
+    waveFrequency float64   // 波动频率
+    damping       float64   // 阻尼系数
 }
 
 // NewYinYangFlow 创建阴阳流模型
@@ -49,6 +49,11 @@ func NewYinYangFlow() *YinYangFlow {
         waveFrequency: 2 * math.Pi / CycleInterval,
         damping:      0.05,
     }
+    
+    // 初始化状态属性
+    yy.state.Properties["yinRatio"] = yy.yinRatio
+    yy.state.Properties["yangRatio"] = yy.yangRatio
+    yy.state.Phase = PhaseYinYang
     
     go yy.runCycle()
     return yy
@@ -77,8 +82,8 @@ func (yy *YinYangFlow) updateCycle() {
     now := time.Now()
     elapsed := now.Sub(yy.lastCycle).Hours()
     
-    // 使用简谐运动模型计算阴阳变化
-    // x(t) = A * e^(-γt) * cos(ωt + φ)
+    // 使用量子谐振子模型计算阴阳变化
+    // ψ(t) = A * e^(-γt) * cos(ωt + φ)
     amplitude := yy.waveAmplitude * math.Exp(-yy.damping*elapsed)
     phase := yy.waveFrequency*elapsed + yy.phaseOffset
     oscillation := amplitude * math.Cos(phase)
@@ -88,48 +93,60 @@ func (yy *YinYangFlow) updateCycle() {
     yy.yinRatio = math.Max(0, math.Min(1, baseRatio))
     yy.yangRatio = 1 - yy.yinRatio
     
-    // 应用物理效应
+    // 更新物理效应
     yy.applyPhysicalEffects()
+    
+    // 更新状态
+    yy.updateState()
     
     yy.lastCycle = now
 }
 
 // applyPhysicalEffects 应用物理效应
 func (yy *YinYangFlow) applyPhysicalEffects() {
-    // 能量守恒: E = Ek + Ep
-    // Ek: 动能 (阳) 
-    // Ep: 势能 (阴)
-    totalEnergy := yy.state.Energy
+    // 将阴阳比例转换为物理量
+    // 使用核心物理系统进行计算
+    physicsState := &core.PhysicsState{
+        Temperature: yy.yangRatio * 100,  // 阳性对应温度
+        Pressure:    yy.yinRatio * 100,   // 阴性对应压力
+        Density:     yy.state.Energy / 100,
+        Entropy:     yy.calculateEntropy(),
+    }
     
-    // 计算动势能分配
-    kineticEnergy := totalEnergy * yy.yangRatio
-    potentialEnergy := totalEnergy * yy.yinRatio
-    
-    // 更新能量系统
-    yy.energy.TransformEnergy(map[core.EnergyType]float64{
-        core.KineticEnergy:   kineticEnergy,
-        core.PotentialEnergy: potentialEnergy,
-    })
-    
-    // 更新场强度
-    fieldStrength := yy.calculateFieldStrength()
-    yy.field.SetStrength(fieldStrength)
-    
-    // 更新物理特性
-    yy.physics.ApplyYinYangTransformation(yy.yinRatio)
+    // 应用物理状态
+    yy.corePhysics.ApplyState(physicsState)
 }
 
-// calculateFieldStrength 计算场强度
-func (yy *YinYangFlow) calculateFieldStrength() float64 {
-    // 基于阴阳比例的场强度计算
-    // 使用双曲正切函数使场强度在边界处平滑
-    imbalance := math.Abs(yy.yinRatio - NeutralPoint)
-    normalizedImbalance := imbalance / MaxImbalance
+// calculateEntropy 计算系统熵
+func (yy *YinYangFlow) calculateEntropy() float64 {
+    // 使用信息熵公式: S = -k * (p_yin * ln(p_yin) + p_yang * ln(p_yang))
+    if yy.yinRatio == 0 || yy.yangRatio == 0 {
+        return 0
+    }
     
-    // tanh函数将值映射到(-1,1)区间
-    fieldStrength := math.Tanh(normalizedImbalance)
+    k := 1.0 // 玻尔兹曼常数的类比
+    entropy := -k * (
+        yy.yinRatio * math.Log(yy.yinRatio) +
+        yy.yangRatio * math.Log(yy.yangRatio),
+    )
     
-    return fieldStrength * yy.state.Energy
+    return entropy
+}
+
+// updateState 更新状态
+func (yy *YinYangFlow) updateState() {
+    yy.state.Properties["yinRatio"] = yy.yinRatio
+    yy.state.Properties["yangRatio"] = yy.yangRatio
+    yy.state.Properties["entropy"] = yy.calculateEntropy()
+    
+    // 根据阴阳比例确定性质
+    if math.Abs(yy.yinRatio - yy.yangRatio) < 0.1 {
+        yy.state.Nature = NatureBalance
+    } else if yy.yinRatio > yy.yangRatio {
+        yy.state.Nature = NatureYin
+    } else {
+        yy.state.Nature = NatureYang
+    }
 }
 
 // Transform 实现阴阳转化
@@ -141,61 +158,22 @@ func (yy *YinYangFlow) Transform(pattern TransformPattern) error {
         // 阴阳互转
         yy.yinRatio, yy.yangRatio = yy.yangRatio, yy.yinRatio
         
-        // 能量转换
-        currentEnergy := yy.state.Energy
-        yy.state.Energy = currentEnergy * pattern.TransformRatio
-        
         // 相位调整
         yy.phaseOffset = math.Pi - yy.phaseOffset
         
         // 更新物理效应
         yy.applyPhysicalEffects()
+        
+        // 更新状态
+        yy.updateState()
     }
     
     return nil
 }
 
-// Interact 实现阴阳相互作用
-func (yy *YinYangFlow) Interact(other FlowModel) error {
-    yy.mu.Lock()
-    defer yy.mu.Unlock()
-    
-    // 获取对方状态
-    otherState := other.GetState()
-    
-    // 计算相互作用强度
-    interactionStrength := yy.calculateInteractionStrength(otherState)
-    
-    // 能量交换
-    energyTransfer := yy.calculateEnergyTransfer(other, interactionStrength)
-    
-    // 更新状态
-    yy.state.Energy += energyTransfer
-    
-    // 记录交互
-    yy.interactions[other.GetModelType().String()] = InteractionRecord{
-        Timestamp: time.Now(),
-        Target:    other.GetModelType(),
-        Effect:    energyTransfer,
-        Duration:  time.Second,
-    }
-    
-    return nil
-}
-
-// calculateInteractionStrength 计算相互作用强度
-func (yy *YinYangFlow) calculateInteractionStrength(otherState ModelState) float64 {
-    // 基于阴阳相性计算作用强度
-    natureCompatibility := 1.0
-    if otherState.Nature == NatureYin && yy.yinRatio > yy.yangRatio {
-        natureCompatibility = 1.5 // 阴阴相应增强
-    } else if otherState.Nature == NatureYang && yy.yangRatio > yy.yinRatio {
-        natureCompatibility = 1.5 // 阳阳相应增强
-    }
-    
-    // 考虑能量差异
-    energyDiff := math.Abs(yy.state.Energy - otherState.Energy)
-    energyFactor := 1.0 / (1.0 + energyDiff/100.0)
-    
-    return natureCompatibility * energyFactor
+// GetYinYangRatio 获取阴阳比例
+func (yy *YinYangFlow) GetYinYangRatio() (float64, float64) {
+    yy.mu.RLock()
+    defer yy.mu.RUnlock()
+    return yy.yinRatio, yy.yangRatio
 }
