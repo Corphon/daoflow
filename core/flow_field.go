@@ -226,3 +226,29 @@ func (f *Field) CalculateInterference(other *Field, position Vector3D) float64 {
     return math.Pow(amplitude1, 2) + math.Pow(amplitude2, 2) +
            2 * amplitude1 * amplitude2 * math.Cos(phaseDiff)
 }
+
+// Initialize 初始化场
+func (f *Field) Initialize() {
+    f.mu.Lock()
+    defer f.mu.Unlock()
+    
+    // 重置所有场值
+    for i := 0; i < f.GridSize; i++ {
+        for j := 0; j < f.GridSize; j++ {
+            f.Strength[i][j] = 0
+            f.Potential[i][j] = 0
+            f.Gradient[i][j] = Vector3D{0, 0, 0}
+        }
+    }
+    
+    // 重置动态特性
+    f.WaveNumber = 1.0
+    f.Frequency = 1.0
+    f.Phase = 0.0
+    f.Coupling = 0.5
+    f.Interaction = 0.5
+    
+    // 清除阴阳分离
+    f.YinField = nil
+    f.YangField = nil
+}
