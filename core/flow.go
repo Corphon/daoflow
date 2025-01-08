@@ -40,7 +40,7 @@ type Flow struct {
     
     created   time.Time      // 创建时间
     modified  time.Time      // 最后修改时间
-    mu        sync.RWMutex   // 并发控制
+    //mu        sync.RWMutex   // 并发控制
 }
 
 // generateID 生成唯一标识符
