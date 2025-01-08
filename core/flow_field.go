@@ -252,3 +252,58 @@ func (f *Field) Initialize() {
     f.YinField = nil
     f.YangField = nil
 }
+
+// SetStrength 设置场强度
+func (f *Field) SetStrength(strength float64) {
+    f.mu.Lock()
+    defer f.mu.Unlock()
+    
+    // 设置整体场强度
+    for i := 0; i < f.GridSize; i++ {
+        for j := 0; j < f.GridSize; j++ {
+            f.Strength[i][j] = strength
+        }
+    }
+}
+
+// SetPhase 设置场相位
+func (f *Field) SetPhase(phase float64) {
+    f.mu.Lock()
+    defer f.mu.Unlock()
+    f.Phase = phase
+}
+
+// Evolve 场演化
+func (f *Field) Evolve() {
+    f.mu.Lock()
+    defer f.mu.Unlock()
+    
+    // 相位演化
+    f.Phase += math.Pi / 4
+    f.Phase = math.Mod(f.Phase, 2*math.Pi)
+    
+    // 更新其他场属性
+    f.WaveNumber *= 0.99  // 波数衰减
+    f.Frequency *= 0.99   // 频率衰减
+}
+
+// GetStrength 获取平均场强度
+func (f *Field) GetStrength() float64 {
+    f.mu.RLock()
+    defer f.mu.RUnlock()
+    
+    total := 0.0
+    count := 0
+    
+    for i := 0; i < f.GridSize; i++ {
+        for j := 0; j < f.GridSize; j++ {
+            total += f.Strength[i][j]
+            count++
+        }
+    }
+    
+    if count == 0 {
+        return 0
+    }
+    return total / float64(count)
+}
