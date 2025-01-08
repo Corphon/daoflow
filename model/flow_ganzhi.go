@@ -3,446 +3,289 @@
 package model
 
 import (
-    "math"
+    "sync"
     "time"
 
     "github.com/Corphon/daoflow/core"
 )
 
-// GanZhiConstants 天干地支常数
+// GanZhiConstants 干支常数
 const (
-    TianGanCount  = 10          // 天干数量
-    DiZhiCount    = 12          // 地支数量
-    CycleLength   = 60          // 六十甲子周期
-    FlowRate      = 0.1         // 流转率
-    MixingRate    = 0.15        // 合化率
+    MaxStemEnergy    = 10.0   // 天干最大能量
+    MaxBranchEnergy  = 10.0   // 地支最大能量
+    CycleLength      = 60     // 六十甲子周期
+    HarmonyThreshold = 0.7    // 和谐阈值
 )
 
-// GanZhiFlow 天干地支模型
+// HeavenlyStem 天干
+type HeavenlyStem uint8
+
+const (
+    Jia HeavenlyStem = iota // 甲
+    Yi                      // 乙
+    Bing                    // 丙
+    Ding                    // 丁
+    Wu                      // 戊
+    Ji                      // 己
+    Geng                    // 庚
+    Xin                     // 辛
+    Ren                     // 壬
+    Gui                     // 癸
+)
+
+// EarthlyBranch 地支
+type EarthlyBranch uint8
+
+const (
+    Zi EarthlyBranch = iota // 子
+    Chou                    // 丑
+    Yin                     // 寅
+    Mao                     // 卯
+    Chen                    // 辰
+    Si                      // 巳
+    Wu_Branch               // 午
+    Wei                     // 未
+    Shen                    // 申
+    You                     // 酉
+    Xu                      // 戌
+    Hai                     // 亥
+)
+
+// GanZhiFlow 干支模型
 type GanZhiFlow struct {
-    *BaseFlowModel
+    *BaseFlowModel // 继承基础模型
 
-    // 依赖的五行模型
-    wuxing *WuXingFlow
-
-    // 天干状态
-    tiangan map[int]*TianGan
-    // 地支状态
-    dizhi map[int]*DiZhi
-
-    // 量子场组件
-    tianganFields map[int]*core.Field
-    dizhiFields  map[int]*core.Field
-
-    // 量子态组件
-    tianganStates map[int]*core.QuantumState
-    dizhiStates  map[int]*core.QuantumState
-}
-
-// TianGan 天干
-type TianGan struct {
-    Index     int           // 序号
-    Name      string        // 名称
-    Element   WuXingPhase   // 五行属性
-    Nature    Nature        // 阴阳性质
-    Energy    float64       // 能量
-    Phase     float64       // 相位
-}
-
-// DiZhi 地支
-type DiZhi struct {
-    Index     int           // 序号
-    Name      string        // 名称
-    Element   WuXingPhase   // 五行属性
-    Nature    Nature        // 阴阳性质
-    Energy    float64       // 能量
-    Phase     float64       // 相位
-    Hidden    []WuXingPhase // 藏干（纳音）
-}
-
-// NewGanZhiFlow 创建天干地支模型
-func NewGanZhiFlow(wuxing *WuXingFlow) *GanZhiFlow {
-    base := NewBaseFlowModel(ModelGanZhi, 1200.0)
-    
-    gz := &GanZhiFlow{
-        BaseFlowModel:  base,
-        wuxing:         wuxing,
-        tiangan:        make(map[int]*TianGan),
-        dizhi:         make(map[int]*DiZhi),
-        tianganFields:  make(map[int]*core.Field),
-        dizhiFields:   make(map[int]*core.Field),
-        tianganStates: make(map[int]*core.QuantumState),
-        dizhiStates:  make(map[int]*core.QuantumState),
+    // 干支状态 - 内部使用
+    state struct {
+        stems    map[HeavenlyStem]*StemState
+        branches map[EarthlyBranch]*BranchState
+        cycle    int
+        harmony  float64
     }
 
-    // 初始化天干地支
-    gz.initializeGanZhi()
-    
+    // 内部组件 - 使用 core 层功能
+    components struct {
+        stemFields    map[HeavenlyStem]*core.Field        // 天干场
+        branchFields  map[EarthlyBranch]*core.Field       // 地支场
+        stemStates    map[HeavenlyStem]*core.QuantumState // 天干量子态
+        branchStates  map[EarthlyBranch]*core.QuantumState // 地支量子态
+        cycleManager  *core.CycleManager                   // 周期管理器
+        harmonizer    *core.Harmonizer                     // 和谐器
+    }
+
+    mu sync.RWMutex
+}
+
+// StemState 天干状态
+type StemState struct {
+    Energy    float64
+    Phase     Phase
+    Element   Element    // 关联五行
+    Polarity  Nature     // 阴阳属性
+    Relations map[EarthlyBranch]float64
+}
+
+// BranchState 地支状态
+type BranchState struct {
+    Energy    float64
+    Phase     Phase
+    Element   Element    // 关联五行
+    Polarity  Nature     // 阴阳属性
+    Relations map[HeavenlyStem]float64
+}
+
+// NewGanZhiFlow 创建干支模型
+func NewGanZhiFlow() *GanZhiFlow {
+    // 创建基础模型
+    base := NewBaseFlowModel(ModelGanZhi, (MaxStemEnergy*10 + MaxBranchEnergy*12))
+
+    // 创建干支模型
+    flow := &GanZhiFlow{
+        BaseFlowModel: base,
+    }
+
+    // 初始化状态
+    flow.initializeStates()
+
+    // 初始化组件
+    flow.initializeComponents()
+
+    return flow
+}
+
+// initializeStates 初始化状态
+func (f *GanZhiFlow) initializeStates() {
+    // 初始化天干状态
+    f.state.stems = make(map[HeavenlyStem]*StemState)
+    for i := Jia; i <= Gui; i++ {
+        f.state.stems[i] = &StemState{
+            Energy:    MaxStemEnergy / 10,
+            Phase:     PhaseNone,
+            Element:   f.getStemElement(i),
+            Polarity:  f.getStemPolarity(i),
+            Relations: make(map[EarthlyBranch]float64),
+        }
+    }
+
+    // 初始化地支状态
+    f.state.branches = make(map[EarthlyBranch]*BranchState)
+    for i := Zi; i <= Hai; i++ {
+        f.state.branches[i] = &BranchState{
+            Energy:    MaxBranchEnergy / 12,
+            Phase:     PhaseNone,
+            Element:   f.getBranchElement(i),
+            Polarity:  f.getBranchPolarity(i),
+            Relations: make(map[HeavenlyStem]float64),
+        }
+    }
+}
+
+// initializeComponents 初始化组件
+func (f *GanZhiFlow) initializeComponents() {
     // 初始化场
-    gz.initializeFields()
+    f.components.stemFields = make(map[HeavenlyStem]*core.Field)
+    f.components.branchFields = make(map[EarthlyBranch]*core.Field)
     
     // 初始化量子态
-    gz.initializeQuantumStates()
+    f.components.stemStates = make(map[HeavenlyStem]*core.QuantumState)
+    f.components.branchStates = make(map[EarthlyBranch]*core.QuantumState)
 
-    return gz
+    // 初始化天干组件
+    for stem := range f.state.stems {
+        f.components.stemFields[stem] = core.NewField()
+        f.components.stemStates[stem] = core.NewQuantumState()
+    }
+
+    // 初始化地支组件
+    for branch := range f.state.branches {
+        f.components.branchFields[branch] = core.NewField()
+        f.components.branchStates[branch] = core.NewQuantumState()
+    }
+
+    // 初始化周期管理器和和谐器
+    f.components.cycleManager = core.NewCycleManager(CycleLength)
+    f.components.harmonizer = core.NewHarmonizer()
 }
 
-// initializeGanZhi 初始化天干地支
-func (gz *GanZhiFlow) initializeGanZhi() {
-    // 初始化天干
-    tianganDefs := []struct {
-        name    string
-        element WuXingPhase
-        nature  Nature
-    }{
-        {"甲", Wood,  NatureYang},
-        {"乙", Wood,  NatureYin},
-        {"丙", Fire,  NatureYang},
-        {"丁", Fire,  NatureYin},
-        {"戊", Earth, NatureYang},
-        {"己", Earth, NatureYin},
-        {"庚", Metal, NatureYang},
-        {"辛", Metal, NatureYin},
-        {"壬", Water, NatureYang},
-        {"癸", Water, NatureYin},
+// Transform 执行干支转换
+func (f *GanZhiFlow) Transform(pattern TransformPattern) error {
+    if err := f.BaseFlowModel.Transform(pattern); err != nil {
+        return err
     }
 
-    // 初始化地支
-    dizhiDefs := []struct {
-        name    string
-        element WuXingPhase
-        nature  Nature
-        hidden  []WuXingPhase
-    }{
-        {"子", Water,  NatureYang, []WuXingPhase{Water}},
-        {"丑", Earth,  NatureYin,  []WuXingPhase{Earth, Metal, Water}},
-        {"寅", Wood,   NatureYang, []WuXingPhase{Wood, Fire, Earth}},
-        {"卯", Wood,   NatureYin,  []WuXingPhase{Wood}},
-        {"辰", Earth,  NatureYang, []WuXingPhase{Earth, Water, Wood}},
-        {"巳", Fire,   NatureYin,  []WuXingPhase{Fire, Earth, Metal}},
-        {"午", Fire,   NatureYang, []WuXingPhase{Fire, Earth}},
-        {"未", Earth,  NatureYin,  []WuXingPhase{Earth, Fire, Wood}},
-        {"申", Metal,  NatureYang, []WuXingPhase{Metal, Water, Earth}},
-        {"酉", Metal,  NatureYin,  []WuXingPhase{Metal}},
-        {"戌", Earth,  NatureYang, []WuXingPhase{Earth, Fire, Metal}},
-        {"亥", Water,  NatureYin,  []WuXingPhase{Water, Wood}},
-    }
-
-    // 初始化天干能量
-    tianganEnergy := gz.capacity * 0.4 / float64(TianGanCount)
-    for i, def := range tianganDefs {
-        gz.tiangan[i] = &TianGan{
-            Index:   i,
-            Name:    def.name,
-            Element: def.element,
-            Nature:  def.nature,
-            Energy:  tianganEnergy,
-            Phase:   2 * math.Pi * float64(i) / float64(TianGanCount),
-        }
-    }
-
-    // 初始化地支能量
-    dizhiEnergy := gz.capacity * 0.6 / float64(DiZhiCount)
-    for i, def := range dizhiDefs {
-        gz.dizhi[i] = &DiZhi{
-            Index:   i,
-            Name:    def.name,
-            Element: def.element,
-            Nature:  def.nature,
-            Energy:  dizhiEnergy,
-            Phase:   2 * math.Pi * float64(i) / float64(DiZhiCount),
-            Hidden:  def.hidden,
-        }
-    }
-}
-
-// initializeFields 初始化场
-func (gz *GanZhiFlow) initializeFields() {
-    // 初始化天干场
-    for i := range gz.tiangan {
-        gz.tianganFields[i] = core.NewField()
-        gz.tianganFields[i].SetPhase(gz.tiangan[i].Phase)
-    }
-
-    // 初始化地支场
-    for i := range gz.dizhi {
-        gz.dizhiFields[i] = core.NewField()
-        gz.dizhiFields[i].SetPhase(gz.dizhi[i].Phase)
-    }
-}
-
-// initializeQuantumStates 初始化量子态
-func (gz *GanZhiFlow) initializeQuantumStates() {
-    // 初始化天干量子态
-    for i := range gz.tiangan {
-        gz.tianganStates[i] = core.NewQuantumState()
-        gz.tianganStates[i].Initialize()
-    }
-
-    // 初始化地支量子态
-    for i := range gz.dizhi {
-        gz.dizhiStates[i] = core.NewQuantumState()
-        gz.dizhiStates[i].Initialize()
-    }
-}
-
-// Transform 天干地支转换
-func (gz *GanZhiFlow) Transform(pattern TransformPattern) error {
-    gz.mu.Lock()
-    defer gz.mu.Unlock()
-
-    if !gz.running {
-        return NewModelError(ErrCodeOperation, "model not running", nil)
-    }
+    f.mu.Lock()
+    defer f.mu.Unlock()
 
     switch pattern {
-    case PatternNormal:
-        gz.naturalTransform()
     case PatternForward:
-        gz.cycleTransform()
-    case PatternReverse:
-        gz.reverseCycleTransform()
+        return f.cyclicTransform()
     case PatternBalance:
-        gz.balanceTransform()
-    case PatternMutate:
-        gz.mutateTransform()
+        return f.harmonizeElements()
     default:
-        return NewModelError(ErrCodeOperation, "invalid transform pattern", nil)
+        return f.naturalTransform()
+    }
+}
+
+// cyclicTransform 周期性转换
+func (f *GanZhiFlow) cyclicTransform() error {
+    // 推进周期
+    f.state.cycle = (f.state.cycle + 1) % CycleLength
+
+    // 获取当前干支组合
+    stem, branch := f.getCurrentGanZhi()
+
+    // 更新能量状态
+    if err := f.updateEnergies(stem, branch); err != nil {
+        return err
     }
 
-    // 同步五行能量
-    gz.synchronizeWithWuXing()
-    
     // 更新量子态
-    gz.updateQuantumStates()
-    
-    // 更新场
-    gz.updateFields()
-    
-    // 更新状态
-    gz.updateModelState()
+    if err := f.updateQuantumStates(stem, branch); err != nil {
+        return err
+    }
 
-    return nil
+    return f.updateHarmony()
+}
+
+// harmonizeElements 调和五行
+func (f *GanZhiFlow) harmonizeElements() error {
+    // 计算五行分布
+    elementDistribution := make(map[Element]float64)
+    
+    // 统计天干五行能量
+    for stem, state := range f.state.stems {
+        elementDistribution[state.Element] += state.Energy
+    }
+
+    // 统计地支五行能量
+    for branch, state := range f.state.branches {
+        elementDistribution[state.Element] += state.Energy
+    }
+
+    // 调和五行能量
+    if err := f.balanceElements(elementDistribution); err != nil {
+        return err
+    }
+
+    return f.updateHarmony()
 }
 
 // naturalTransform 自然转换
-func (gz *GanZhiFlow) naturalTransform() {
-    // 天干自然转换
-    for i, gan := range gz.tiangan {
-        state := gz.tianganStates[i]
-        state.Evolve(gan.Name)
-        fluctuation := state.GetFluctuation()
-        gan.Energy *= (1 + fluctuation)
-        gan.Phase = math.Mod(gan.Phase + FlowRate, 2*math.Pi)
-    }
+func (f *GanZhiFlow) naturalTransform() error {
+    // 获取当前状态
+    stem, branch := f.getCurrentGanZhi()
 
-    // 地支自然转换
-    for i, zhi := range gz.dizhi {
-        state := gz.dizhiStates[i]
-        state.Evolve(zhi.Name)
-        fluctuation := state.GetFluctuation()
-        zhi.Energy *= (1 + fluctuation)
-        zhi.Phase = math.Mod(zhi.Phase + FlowRate*0.8, 2*math.Pi)
-    }
-}
-
-// cycleTransform 循环转换
-func (gz *GanZhiFlow) cycleTransform() {
-    // 天干循环
-    for i := 0; i < TianGanCount-1; i++ {
-        energy := gz.tiangan[i].Energy * FlowRate
-        gz.tiangan[i].Energy -= energy
-        gz.tiangan[i+1].Energy += energy
-    }
-
-    // 地支循环
-    for i := 0; i < DiZhiCount-1; i++ {
-        energy := gz.dizhi[i].Energy * FlowRate
-        gz.dizhi[i].Energy -= energy
-        gz.dizhi[i+1].Energy += energy
-    }
-}
-
-// reverseCycleTransform 逆循环转换
-func (gz *GanZhiFlow) reverseCycleTransform() {
-    // 天干逆循环
-    for i := TianGanCount - 1; i > 0; i-- {
-        energy := gz.tiangan[i].Energy * FlowRate
-        gz.tiangan[i].Energy -= energy
-        gz.tiangan[i-1].Energy += energy
-    }
-
-    // 地支逆循环
-    for i := DiZhiCount - 1; i > 0; i-- {
-        energy := gz.dizhi[i].Energy * FlowRate
-        gz.dizhi[i].Energy -= energy
-        gz.dizhi[i-1].Energy += energy
-    }
-}
-
-// balanceTransform 平衡转换
-func (gz *GanZhiFlow) balanceTransform() {
-    // 平衡天干能量
-    tianganEnergy := gz.capacity * 0.4 / float64(TianGanCount)
-    for _, gan := range gz.tiangan {
-        gan.Energy = tianganEnergy
-    }
-
-    // 平衡地支能量
-    dizhiEnergy := gz.capacity * 0.6 / float64(DiZhiCount)
-    for _, zhi := range gz.dizhi {
-        zhi.Energy = dizhiEnergy
-    }
-
-    // 重置动量
-    for _, gan := range gz.tiangan {
-        gan.Momentum = Vector3D{}
-    }
-    for _, zhi := range gz.dizhi {
-        zhi.Momentum = Vector3D{}
-    }
-}
-
-// mutateTransform 变异转换
-func (gz *GanZhiFlow) mutateTransform() {
-    // 使用量子涨落进行随机变异
-    for i, gan := range gz.tiangan {
-        fluctuation := gz.tianganStates[i].GetFluctuation()
-        gan.Energy *= (1 + fluctuation)
-    }
-    
-    for i, zhi := range gz.dizhi {
-        fluctuation := gz.dizhiStates[i].GetFluctuation()
-        zhi.Energy *= (1 + fluctuation)
-    }
-}
-
-// synchronizeWithWuXing 与五行同步
-func (gz *GanZhiFlow) synchronizeWithWuXing() {
-    if gz.wuxing == nil {
-        return
-    }
-
-    // 同步天干与五行
-    for _, gan := range gz.tiangan {
-        wuxingEnergy := gz.wuxing.GetElementEnergy(gan.Element)
-        resonance := math.Min(gan.Energy, wuxingEnergy) * ResonanceRate
-        gan.Energy += resonance
-    }
-
-    // 同步地支与五行
-    for _, zhi := range gz.dizhi {
-        wuxingEnergy := gz.wuxing.GetElementEnergy(zhi.Element)
-        resonance := math.Min(zhi.Energy, wuxingEnergy) * ResonanceRate
-        zhi.Energy += resonance
-    }
-}
-
-// updateQuantumStates 更新量子态
-func (gz *GanZhiFlow) updateQuantumStates() {
-    // 更新天干量子态
-    totalTianganEnergy := gz.getTotalTianganEnergy()
-    for i, gan := range gz.tiangan {
-        probability := gan.Energy / totalTianganEnergy
-        gz.tianganStates[i].SetProbability(probability)
-        gz.tianganStates[i].Evolve(gan.Name)
-    }
-    
-    // 更新地支量子态
-    totalDizhiEnergy := gz.getTotalDizhiEnergy()
-    for i, zhi := range gz.dizhi {
-        probability := zhi.Energy / totalDizhiEnergy
-        gz.dizhiStates[i].SetProbability(probability)
-        gz.dizhiStates[i].Evolve(zhi.Name)
-    }
-}
-
-// updateFields 更新场
-func (gz *GanZhiFlow) updateFields() {
-    // 更新天干场
-    totalTianganEnergy := gz.getTotalTianganEnergy()
-    for i, gan := range gz.tiangan {
-        field := gz.tianganFields[i]
-        field.SetStrength(gan.Energy / totalTianganEnergy)
-        field.SetPhase(gz.tianganStates[i].GetPhase())
-        field.Evolve()
-    }
-    
-    // 更新地支场
-    totalDizhiEnergy := gz.getTotalDizhiEnergy()
-    for i, zhi := range gz.dizhi {
-        field := gz.dizhiFields[i]
-        field.SetStrength(zhi.Energy / totalDizhiEnergy)
-        field.SetPhase(gz.dizhiStates[i].GetPhase())
-        field.Evolve()
-    }
-}
-
-// updateModelState 更新模型状态
-func (gz *GanZhiFlow) updateModelState() {
-    // 更新状态属性
-    for i, gan := range gz.tiangan {
-        gz.state.Properties["tiangan_"+gan.Name] = gan.Energy
-    }
-    for i, zhi := range gz.dizhi {
-        gz.state.Properties["dizhi_"+zhi.Name] = zhi.Energy
-    }
-    
-    gz.state.Phase = PhaseGanZhi
-    gz.state.UpdateTime = time.Now()
-}
-
-// GetTianGanEnergy 获取天干能量
-func (gz *GanZhiFlow) GetTianGanEnergy(index int) float64 {
-    gz.mu.RLock()
-    defer gz.mu.RUnlock()
-    
-    if gan, exists := gz.tiangan[index]; exists {
-        return gan.Energy
-    }
-    return 0
-}
-
-// GetDiZhiEnergy 获取地支能量
-func (gz *GanZhiFlow) GetDiZhiEnergy(index int) float64 {
-    gz.mu.RLock()
-    defer gz.mu.RUnlock()
-    
-    if zhi, exists := gz.dizhi[index]; exists {
-        return zhi.Energy
-    }
-    return 0
-}
-
-// getTotalTianganEnergy 获取总天干能量
-func (gz *GanZhiFlow) getTotalTianganEnergy() float64 {
-    var total float64
-    for _, gan := range gz.tiangan {
-        total += gan.Energy
-    }
-    return total
-}
-
-// getTotalDizhiEnergy 获取总地支能量
-func (gz *GanZhiFlow) getTotalDizhiEnergy() float64 {
-    var total float64
-    for _, zhi := range gz.dizhi {
-        total += zhi.Energy
-    }
-    return total
-}
-
-// Close 关闭干支模型
-func (gz *GanZhiFlow) Close() error {
-    if err := gz.BaseFlowModel.Close(); err != nil {
+    // 计算相互作用
+    if err := f.calculateInteractions(stem, branch); err != nil {
         return err
     }
-    
-    // 清理资源
-    gz.tianganFields = nil
-    gz.dizhiFields = nil
-    gz.tianganStates = nil
-    gz.dizhiStates = nil
-    
-    return nil
+
+    // 更新关系网络
+    if err := f.updateRelations(); err != nil {
+        return err
+    }
+
+    return f.updateHarmony()
+}
+
+// Close 关闭模型
+func (f *GanZhiFlow) Close() error {
+    f.mu.Lock()
+    defer f.mu.Unlock()
+
+    // 清理组件
+    for stem := range f.components.stemFields {
+        f.components.stemFields[stem] = nil
+        f.components.stemStates[stem] = nil
+    }
+    for branch := range f.components.branchFields {
+        f.components.branchFields[branch] = nil
+        f.components.branchStates[branch] = nil
+    }
+
+    f.components.cycleManager = nil
+    f.components.harmonizer = nil
+
+    return f.BaseFlowModel.Close()
+}
+
+// 辅助方法...
+func (f *GanZhiFlow) getStemElement(stem HeavenlyStem) Element {
+    // 实现天干五行对应关系
+    return Wood // 示例返回
+}
+
+func (f *GanZhiFlow) getBranchElement(branch EarthlyBranch) Element {
+    // 实现地支五行对应关系
+    return Wood // 示例返回
+}
+
+func (f *GanZhiFlow) getStemPolarity(stem HeavenlyStem) Nature {
+    // 实现天干阴阳属性
+    return NatureYang // 示例返回
+}
+
+func (f *GanZhiFlow) getBranchPolarity(branch EarthlyBranch) Nature {
+    // 实现地支阴阳属性
+    return NatureYin // 示例返回
 }
