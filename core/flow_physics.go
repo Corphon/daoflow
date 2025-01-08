@@ -176,7 +176,7 @@ func (fp *FlowPhysics) applyYinCharacteristics(ratio float64) {
 // applyYangCharacteristics 应用阳性特征
 func (fp *FlowPhysics) applyYangCharacteristics(ratio float64) {
     // 阳性特征: 增加动能,降低粘性,升温,升压
-    speed := fp.calculateSpeed()
+    //speed := fp.calculateSpeed()
     fp.velocity = Vector3D{
         X: fp.velocity.X * (1 + 0.3*ratio),
         Y: fp.velocity.Y * (1 + 0.3*ratio),
