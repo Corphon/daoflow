@@ -3,107 +3,49 @@
 package model
 
 import (
-    "context"
     "sync"
     "time"
 
     "github.com/Corphon/daoflow/core"
 )
 
-// FlowModel 流模型接口
-type FlowModel interface {
-    // 基础流控制
-    Initialize() error
-    Start() error
-    Stop() error
-    
-    // 状态管理
-    GetModelType() ModelType
-    GetState() ModelState
-    
-    // 模型交互
-    Interact(other FlowModel) error
-    Transform(pattern TransformPattern) error
-    
-    // 能量管理
-    AdjustEnergy(delta float64) error
-}
-
-// BaseFlowModel 基础流模型实现
+// BaseFlowModel 基础流模型
 type BaseFlowModel struct {
-    mu          sync.RWMutex
-    modelType   ModelType
-    capacity    float64
+    mu       sync.RWMutex
+    modelType ModelType
+    capacity  float64
+
+    // 基础状态
+    state    ModelState
+    running  bool
     
-    // 状态管理
-    state       ModelState
+    // 内部组件
+    quantum  *core.QuantumState  // 量子状态
+    field    *core.Field        // 统一场
     
-    // 子系统组件
-    coreFlow    *core.Flow        // 核心流体系统
-    corePhysics *core.FlowPhysics // 物理特性系统
-    
-    // 状态追踪
-    interactions map[string]InteractionRecord
-    
-    // 观察者
-    observers   []ModelObserver
-    done        chan struct{}
+    // 控制
+    done     chan struct{}
 }
 
 // NewBaseFlowModel 创建基础流模型
 func NewBaseFlowModel(modelType ModelType, capacity float64) *BaseFlowModel {
+    if capacity <= 0 {
+        capacity = DefaultCapacity
+    }
+
     return &BaseFlowModel{
         modelType: modelType,
         capacity:  capacity,
         state: ModelState{
+            Type:       modelType,
             Energy:     0,
-            Phase:      PhaseWuJi,
-            Nature:     NatureBalance,
-            Properties: make(map[string]float64),
+            Properties: make(map[string]interface{}),
+            UpdateTime: time.Now(),
         },
-        coreFlow:    core.NewFlow(&core.FlowConfig{
-            MinEnergy:    0,
-            MaxEnergy:    capacity,
-            FlowInterval: time.Second,
-        }),
-        corePhysics: core.NewFlowPhysics(),
-        interactions: make(map[string]InteractionRecord),
-        observers:   make([]ModelObserver, 0),
-        done:        make(chan struct{}),
+        quantum:  core.NewQuantumState(),
+        field:    core.NewField(),
+        done:     make(chan struct{}),
     }
-}
-
-// Initialize 初始化模型
-func (bm *BaseFlowModel) Initialize() error {
-    bm.mu.Lock()
-    defer bm.mu.Unlock()
-    
-    // 初始化核心流体系统
-    if err := bm.coreFlow.Initialize(); err != nil {
-        return err
-    }
-    
-    // 更新初始状态
-    bm.updateStateFromCore()
-    return nil
-}
-
-// Start 启动模型
-func (bm *BaseFlowModel) Start() error {
-    bm.mu.Lock()
-    defer bm.mu.Unlock()
-    
-    // 启动核心流体系统
-    return bm.coreFlow.Start()
-}
-
-// Stop 停止模型
-func (bm *BaseFlowModel) Stop() error {
-    bm.mu.Lock()
-    defer bm.mu.Unlock()
-    
-    close(bm.done)
-    return bm.coreFlow.Stop()
 }
 
 // GetModelType 获取模型类型
@@ -115,128 +57,194 @@ func (bm *BaseFlowModel) GetModelType() ModelType {
 func (bm *BaseFlowModel) GetState() ModelState {
     bm.mu.RLock()
     defer bm.mu.RUnlock()
-    
-    bm.updateStateFromCore()
     return bm.state
 }
 
-// Interact 模型交互
-func (bm *BaseFlowModel) Interact(other FlowModel) error {
+// Start 启动模型
+func (bm *BaseFlowModel) Start() error {
     bm.mu.Lock()
     defer bm.mu.Unlock()
+
+    if bm.running {
+        return NewModelError(ErrCodeOperation, "model already started", nil)
+    }
+
+    bm.running = true
+    bm.done = make(chan struct{})
+
+    // 初始化量子态
+    bm.quantum.Initialize()
     
-    // 计算交互效果
-    effect := bm.calculateInteractionEffect(other)
-    
-    // 记录交互
-    bm.recordInteraction(other.GetModelType().String(), effect)
-    
-    // 应用交互效果
-    return bm.AdjustEnergy(effect)
+    // 初始化场
+    bm.field.Initialize()
+
+    return nil
 }
 
-// Transform 状态转换
-func (bm *BaseFlowModel) Transform(pattern TransformPattern) error {
+// Stop 停止模型
+func (bm *BaseFlowModel) Stop() error {
     bm.mu.Lock()
     defer bm.mu.Unlock()
-    
-    if pattern.SourceType != bm.modelType {
-        return ErrInvalidTransform
+
+    if !bm.running {
+        return NewModelError(ErrCodeOperation, "model not running", nil)
     }
-    
-    // 计算能量变化
-    energyChange := bm.calculateTransformEnergy(pattern)
-    
-    // 应用物理变换
-    if err := bm.corePhysics.ApplyYinYangTransformation(pattern.TransformRatio); err != nil {
-        return err
+
+    bm.running = false
+    close(bm.done)
+    return nil
+}
+
+// Reset 重置模型
+func (bm *BaseFlowModel) Reset() error {
+    bm.mu.Lock()
+    defer bm.mu.Unlock()
+
+    // 停止运行
+    if bm.running {
+        if err := bm.Stop(); err != nil {
+            return err
+        }
     }
-    
-    // 更新能量
-    if err := bm.AdjustEnergy(energyChange); err != nil {
-        return err
+
+    // 重置状态
+    bm.state = ModelState{
+        Type:       bm.modelType,
+        Energy:     0,
+        Properties: make(map[string]interface{}),
+        UpdateTime: time.Now(),
     }
+
+    // 重置量子态
+    bm.quantum.Reset()
     
+    // 重置场
+    bm.field.Reset()
+
+    return nil
+}
+
+// GetEnergy 获取能量
+func (bm *BaseFlowModel) GetEnergy() float64 {
+    bm.mu.RLock()
+    defer bm.mu.RUnlock()
+    return bm.state.Energy
+}
+
+// SetEnergy 设置能量
+func (bm *BaseFlowModel) SetEnergy(energy float64) error {
+    if !ValidateEnergy(energy) {
+        return NewModelError(ErrCodeOperation, "invalid energy value", nil)
+    }
+
+    bm.mu.Lock()
+    defer bm.mu.Unlock()
+
+    // 更新量子态
+    probability := energy / bm.capacity
+    bm.quantum.SetProbability(probability)
+    
+    // 更新场强度
+    bm.field.SetStrength(probability)
+
     // 更新状态
-    bm.updateStateFromCore()
+    bm.state.Energy = energy
+    bm.state.UpdateTime = time.Now()
+
     return nil
 }
 
 // AdjustEnergy 调整能量
 func (bm *BaseFlowModel) AdjustEnergy(delta float64) error {
+    bm.mu.Lock()
+    defer bm.mu.Unlock()
+
     newEnergy := bm.state.Energy + delta
-    if newEnergy < 0 || newEnergy > bm.capacity {
-        return ErrEnergyOutOfRange
+    if !ValidateEnergy(newEnergy) {
+        return NewModelError(ErrCodeOperation, "energy adjustment out of range", nil)
     }
+
+    // 更新量子态
+    probability := newEnergy / bm.capacity
+    bm.quantum.SetProbability(probability)
     
-    // 更新核心流体系统的能量
-    if err := bm.coreFlow.SetEnergy(newEnergy); err != nil {
-        return err
-    }
-    
+    // 更新场强度
+    bm.field.SetStrength(probability)
+
     // 更新状态
     bm.state.Energy = newEnergy
-    bm.notifyObservers()
+    bm.state.UpdateTime = time.Now()
+
     return nil
 }
 
-// 内部辅助方法
+// GetPhase 获取相位
+func (bm *BaseFlowModel) GetPhase() Phase {
+    bm.mu.RLock()
+    defer bm.mu.RUnlock()
+    return bm.state.Phase
+}
 
-// updateStateFromCore 从核心系统更新状态
-func (bm *BaseFlowModel) updateStateFromCore() {
-    coreState := bm.coreFlow.GetState()
-    physicsState := bm.corePhysics.GetState()
+// SetPhase 设置相位
+func (bm *BaseFlowModel) SetPhase(phase Phase) error {
+    if !ValidatePhase(phase) {
+        return NewModelError(ErrCodeOperation, "invalid phase value", nil)
+    }
+
+    bm.mu.Lock()
+    defer bm.mu.Unlock()
+
+    // 更新量子态相位
+    bm.quantum.SetPhase(float64(phase))
     
-    bm.state.Energy = coreState.Energy
-    bm.state.Properties["density"] = physicsState.Density
-    bm.state.Properties["temperature"] = physicsState.Temperature
-    bm.state.Properties["pressure"] = physicsState.Pressure
-    bm.state.Properties["entropy"] = physicsState.Entropy
+    // 更新场相位
+    bm.field.SetPhase(float64(phase))
+
+    // 更新状态
+    bm.state.Phase = phase
+    bm.state.UpdateTime = time.Now()
+
+    return nil
 }
 
-// calculateInteractionEffect 计算交互效果
-func (bm *BaseFlowModel) calculateInteractionEffect(other FlowModel) float64 {
-    otherState := other.GetState()
-    energyDiff := bm.state.Energy - otherState.Energy
-    return energyDiff * 0.1 // 简单的能量平衡效应
-}
-
-// calculateTransformEnergy 计算转换能量
-func (bm *BaseFlowModel) calculateTransformEnergy(pattern TransformPattern) float64 {
-    return bm.state.Energy * pattern.TransformRatio
-}
-
-// recordInteraction 记录交互
-func (bm *BaseFlowModel) recordInteraction(targetType string, effect float64) {
-    bm.interactions[targetType] = InteractionRecord{
-        Timestamp: time.Now(),
-        Effect:    effect,
-        Duration:  time.Second,
-    }
-}
-
-// notifyObservers 通知观察者
-func (bm *BaseFlowModel) notifyObservers() {
-    for _, observer := range bm.observers {
-        observer.OnStateChange(bm.state)
-    }
-}
-
-// AddObserver 添加观察者
-func (bm *BaseFlowModel) AddObserver(observer ModelObserver) {
+// Transform 基础转换实现
+func (bm *BaseFlowModel) Transform(pattern TransformPattern) error {
     bm.mu.Lock()
     defer bm.mu.Unlock()
-    bm.observers = append(bm.observers, observer)
+
+    if !bm.running {
+        return NewModelError(ErrCodeOperation, "model not running", nil)
+    }
+
+    // 量子态演化
+    bm.quantum.Evolve(pattern.String())
+    
+    // 场演化
+    bm.field.Evolve()
+
+    // 更新状态
+    bm.state.UpdateTime = time.Now()
+
+    return nil
 }
 
-// RemoveObserver 移除观察者
-func (bm *BaseFlowModel) RemoveObserver(observer ModelObserver) {
-    bm.mu.Lock()
-    defer bm.mu.Unlock()
-    for i, obs := range bm.observers {
-        if obs == observer {
-            bm.observers = append(bm.observers[:i], bm.observers[i+1:]...)
-            break
-        }
+// updateState 更新状态
+func (bm *BaseFlowModel) updateState(updates map[string]interface{}) {
+    for k, v := range updates {
+        bm.state.Properties[k] = v
     }
+    bm.state.UpdateTime = time.Now()
+}
+
+// validateState 验证状态
+func (bm *BaseFlowModel) validateState() error {
+    if !ValidateEnergy(bm.state.Energy) {
+        return NewModelError(ErrCodeState, "invalid energy state", nil)
+    }
+
+    if !ValidatePhase(bm.state.Phase) {
+        return NewModelError(ErrCodeState, "invalid phase state", nil)
+    }
+
+    return nil
 }
