@@ -3,7 +3,7 @@
 package model
 
 import (
-    "math"
+    "sync"
     "time"
 
     "github.com/Corphon/daoflow/core"
@@ -11,319 +11,311 @@ import (
 
 // WuXingConstants 五行常数
 const (
-    PhaseCount      = 5                // 五行数量
-    CycleLength     = 2 * math.Pi      // 周期长度
-    GenerateRate    = 0.2              // 相生率
-    RestrainRate    = 0.15             // 相克率
-    WeakenRate      = 0.1              // 相泄率
-    ControlRate     = 0.05             // 相制率
-    BalancePoint    = 0.2              // 平衡点(1/5)
+    MaxElementEnergy = 20.0  // 每个元素最大能量
+    CycleThreshold  = 0.3   // 循环阈值
+    FlowRate       = 0.05   // 流动率
+)
+
+// Element 五行元素
+type Element uint8
+
+const (
+    Wood Element = iota
+    Fire
+    Earth
+    Metal
+    Water
 )
 
 // WuXingFlow 五行模型
 type WuXingFlow struct {
-    *BaseFlowModel
+    *BaseFlowModel // 继承基础模型
 
-    // 五行能量
-    energies    map[WuXingPhase]float64
-    
-    // 量子态组件
-    states      map[WuXingPhase]*core.QuantumState
-    
-    // 场组件
-    fields      map[WuXingPhase]*core.Field
-    
-    // 相位关系
-    relationships map[WuXingPhase]map[WuXingPhase]int
+    // 五行状态 - 内部使用
+    state struct {
+        elements map[Element]*ElementState
+        cycle    CycleType
+        strength float64
+    }
+
+    // 内部组件 - 使用 core 层功能
+    components struct {
+        fields      map[Element]*core.Field         // 元素场
+        states      map[Element]*core.QuantumState  // 量子态
+        network     *core.EnergyNetwork            // 能量网络
+        interaction *core.Interaction              // 元素交互
+    }
+
+    mu sync.RWMutex
 }
+
+// ElementState 元素状态
+type ElementState struct {
+    Energy    float64
+    Phase     Phase
+    Flow      float64
+    Relations map[Element]float64
+}
+
+// CycleType 循环类型
+type CycleType uint8
+
+const (
+    NoCycle CycleType = iota
+    GeneratingCycle  // 生
+    ConstrainingCycle // 克
+    RebellionCycle   // 反逆
+)
 
 // NewWuXingFlow 创建五行模型
 func NewWuXingFlow() *WuXingFlow {
-    base := NewBaseFlowModel(ModelWuXing, 500.0)
-    
-    wx := &WuXingFlow{
-        BaseFlowModel:  base,
-        energies:       make(map[WuXingPhase]float64),
-        states:         make(map[WuXingPhase]*core.QuantumState),
-        fields:         make(map[WuXingPhase]*core.Field),
-        relationships:  initializeRelationships(),
+    // 创建基础模型
+    base := NewBaseFlowModel(ModelWuXing, MaxElementEnergy*5)
+
+    // 创建五行模型
+    flow := &WuXingFlow{
+        BaseFlowModel: base,
     }
 
-    // 初始化五行
-    wx.initializePhases()
-    
-    // 设置初始状态
-    wx.state.Phase = PhaseWuXing
-    wx.state.Properties["dominant"] = Metal // 默认以金起始
+    // 初始化状态
+    flow.state.elements = make(map[Element]*ElementState)
+    flow.initializeElements()
 
-    return wx
+    // 初始化组件
+    flow.initializeComponents()
+
+    return flow
 }
 
-// initializePhases 初始化五行
-func (wx *WuXingFlow) initializePhases() {
-    phases := []WuXingPhase{Metal, Wood, Water, Fire, Earth}
-    
-    for _, phase := range phases {
-        // 初始化能量
-        wx.energies[phase] = wx.state.Energy / PhaseCount
-        
-        // 初始化量子态
-        wx.states[phase] = core.NewQuantumState()
-        wx.states[phase].SetPhase(float64(phase) * CycleLength / PhaseCount)
-        
-        // 初始化场
-        wx.fields[phase] = core.NewField()
-        wx.fields[phase].SetStrength(1.0 / PhaseCount)
-    }
-}
-
-// initializeRelationships 初始化五行关系
-func initializeRelationships() map[WuXingPhase]map[WuXingPhase]int {
-    relationships := make(map[WuXingPhase]map[WuXingPhase]int)
-    
-    // 初始化关系映射
-    relationships[Metal] = map[WuXingPhase]int{
-        Water: RelationGenerate,  // 金生水
-        Wood:  RelationRestrain,  // 金克木
-        Fire:  RelationWeaken,    // 火克金
-        Earth: RelationControl,   // 土生金
-    }
-    
-    relationships[Wood] = map[WuXingPhase]int{
-        Fire:  RelationGenerate,  // 木生火
-        Earth: RelationRestrain,  // 木克土
-        Metal: RelationWeaken,    // 金克木
-        Water: RelationControl,   // 水生木
-    }
-    
-    relationships[Water] = map[WuXingPhase]int{
-        Wood:  RelationGenerate,  // 水生木
-        Fire:  RelationRestrain,  // 水克火
-        Earth: RelationWeaken,    // 土克水
-        Metal: RelationControl,   // 金生水
-    }
-    
-    relationships[Fire] = map[WuXingPhase]int{
-        Earth: RelationGenerate,  // 火生土
-        Metal: RelationRestrain,  // 火克金
-        Water: RelationWeaken,    // 水克火
-        Wood:  RelationControl,   // 木生火
-    }
-    
-    relationships[Earth] = map[WuXingPhase]int{
-        Metal: RelationGenerate,  // 土生金
-        Water: RelationRestrain,  // 土克水
-        Wood:  RelationWeaken,    // 木克土
-        Fire:  RelationControl,   // 火生土
-    }
-    
-    return relationships
-}
-
-// Transform 五行转换实现
-func (wx *WuXingFlow) Transform(pattern TransformPattern) error {
-    wx.mu.Lock()
-    defer wx.mu.Unlock()
-
-    if !wx.running {
-        return NewModelError(ErrCodeOperation, "model not running", nil)
-    }
-
-    // 执行转换
-    switch pattern {
-    case PatternNormal:
-        wx.normalTransform()
-    case PatternForward:
-        wx.generateTransform()
-    case PatternReverse:
-        wx.restrainTransform()
-    case PatternBalance:
-        wx.balanceTransform()
-    case PatternMutate:
-        wx.mutateTransform()
-    default:
-        return NewModelError(ErrCodeOperation, "invalid transform pattern", nil)
-    }
-
-    // 更新量子态
-    wx.updateQuantumStates()
-    
-    // 更新场
-    wx.updateFields()
-    
-    // 更新状态
-    wx.updateModelState()
-
-    return nil
-}
-
-// normalTransform 常规转换
-func (wx *WuXingFlow) normalTransform() {
-    // 获取当前主导相位
-    dominant := wx.state.Properties["dominant"].(WuXingPhase)
-    
-    // 计算相生和相克作用
-    for target, energy := range wx.energies {
-        if relationship, exists := wx.relationships[dominant][target]; exists {
-            switch relationship {
-            case RelationGenerate:
-                wx.transferEnergy(dominant, target, energy*GenerateRate)
-            case RelationRestrain:
-                wx.transferEnergy(dominant, target, -energy*RestrainRate)
-            case RelationWeaken:
-                wx.transferEnergy(target, dominant, energy*WeakenRate)
-            case RelationControl:
-                wx.transferEnergy(target, dominant, -energy*ControlRate)
-            }
+// initializeElements 初始化元素
+func (f *WuXingFlow) initializeElements() {
+    elements := []Element{Wood, Fire, Earth, Metal, Water}
+    for _, elem := range elements {
+        f.state.elements[elem] = &ElementState{
+            Energy:    MaxElementEnergy / 5,
+            Phase:     PhaseNone,
+            Flow:      0,
+            Relations: make(map[Element]float64),
         }
+    }
+}
+
+// initializeComponents 初始化组件
+func (f *WuXingFlow) initializeComponents() {
+    // 初始化场
+    f.components.fields = make(map[Element]*core.Field)
+    f.components.states = make(map[Element]*core.QuantumState)
+
+    for elem := range f.state.elements {
+        f.components.fields[elem] = core.NewField()
+        f.components.states[elem] = core.NewQuantumState()
+    }
+
+    // 初始化能量网络
+    f.components.network = core.NewEnergyNetwork()
+    f.components.interaction = core.NewInteraction()
+}
+
+// Start 启动模型
+func (f *WuXingFlow) Start() error {
+    if err := f.BaseFlowModel.Start(); err != nil {
+        return err
+    }
+
+    // 初始化场和量子态
+    return f.initializeWuXing()
+}
+
+// initializeWuXing 初始化五行
+func (f *WuXingFlow) initializeWuXing() error {
+    f.mu.Lock()
+    defer f.mu.Unlock()
+
+    // 初始化场
+    for _, field := range f.components.fields {
+        if err := field.Initialize(); err != nil {
+            return WrapError(err, ErrCodeOperation, "failed to initialize field")
+        }
+    }
+
+    // 初始化量子态
+    for _, state := range f.components.states {
+        if err := state.Initialize(); err != nil {
+            return WrapError(err, ErrCodeOperation, "failed to initialize quantum state")
+        }
+    }
+
+    // 初始化能量网络
+    return f.components.network.Initialize()
+}
+
+// Transform 执行五行转换
+func (f *WuXingFlow) Transform(pattern TransformPattern) error {
+    if err := f.BaseFlowModel.Transform(pattern); err != nil {
+        return err
+    }
+
+    f.mu.Lock()
+    defer f.mu.Unlock()
+
+    switch pattern {
+    case PatternForward:
+        return f.generateTransform()
+    case PatternReverse:
+        return f.constrainTransform()
+    case PatternBalance:
+        return f.balanceElements()
+    default:
+        return f.naturalTransform()
     }
 }
 
 // generateTransform 相生转换
-func (wx *WuXingFlow) generateTransform() {
-    dominant := wx.state.Properties["dominant"].(WuXingPhase)
+func (f *WuXingFlow) generateTransform() error {
+    sequence := []Element{Wood, Fire, Earth, Metal, Water}
     
-    // 寻找相生关系
-    for target, relationship := range wx.relationships[dominant] {
-        if relationship == RelationGenerate {
-            wx.transferEnergy(dominant, target, wx.energies[dominant]*GenerateRate)
-            wx.state.Properties["dominant"] = target
-            break
+    for i := 0; i < len(sequence); i++ {
+        current := sequence[i]
+        next := sequence[(i+1)%len(sequence)]
+        
+        // 计算转换量
+        transferAmount := f.state.elements[current].Energy * FlowRate
+        
+        // 执行能量转换
+        if err := f.transferEnergy(current, next, transferAmount); err != nil {
+            return err
         }
     }
+
+    f.state.cycle = GeneratingCycle
+    return f.updateElementStates()
 }
 
-// restrainTransform 相克转换
-func (wx *WuXingFlow) restrainTransform() {
-    dominant := wx.state.Properties["dominant"].(WuXingPhase)
-    
-    // 寻找相克关系
-    for target, relationship := range wx.relationships[dominant] {
-        if relationship == RelationRestrain {
-            wx.transferEnergy(dominant, target, -wx.energies[target]*RestrainRate)
-            wx.state.Properties["dominant"] = target
-            break
+// constrainTransform 相克转换
+func (f *WuXingFlow) constrainTransform() error {
+    // 木克土、土克水、水克火、火克金、金克木
+    constraints := map[Element]Element{
+        Wood: Earth,
+        Earth: Water,
+        Water: Fire,
+        Fire: Metal,
+        Metal: Wood,
+    }
+
+    for source, target := range constraints {
+        // 计算克制强度
+        strength := f.state.elements[source].Energy * FlowRate
+        
+        // 执行克制作用
+        if err := f.applyConstraint(source, target, strength); err != nil {
+            return err
         }
     }
+
+    f.state.cycle = ConstrainingCycle
+    return f.updateElementStates()
 }
 
-// balanceTransform 平衡转换
-func (wx *WuXingFlow) balanceTransform() {
-    totalEnergy := wx.state.Energy
-    balanceEnergy := totalEnergy / PhaseCount
-    
-    for phase := range wx.energies {
-        wx.energies[phase] = balanceEnergy
+// balanceElements 平衡元素
+func (f *WuXingFlow) balanceElements() error {
+    // 计算总能量
+    totalEnergy := 0.0
+    for _, state := range f.state.elements {
+        totalEnergy += state.Energy
     }
-}
 
-// mutateTransform 变异转换
-func (wx *WuXingFlow) mutateTransform() {
-    // 使用量子涨落
-    for phase, state := range wx.states {
-        fluctuation := state.GetFluctuation()
-        wx.energies[phase] *= (1 + fluctuation)
-    }
-    
-    // 重新归一化
-    wx.normalizeEnergies()
-}
-
-// transferEnergy 能量转移
-func (wx *WuXingFlow) transferEnergy(from, to WuXingPhase, amount float64) {
-    if amount > wx.energies[from] {
-        amount = wx.energies[from]
-    }
-    
-    wx.energies[from] -= amount
-    wx.energies[to] += amount
-}
-
-// normalizeEnergies 能量归一化
-func (wx *WuXingFlow) normalizeEnergies() {
-    totalEnergy := wx.state.Energy
-    currentTotal := 0.0
-    
-    for _, energy := range wx.energies {
-        currentTotal += energy
-    }
-    
-    if currentTotal > 0 {
-        ratio := totalEnergy / currentTotal
-        for phase := range wx.energies {
-            wx.energies[phase] *= ratio
+    // 平均分配能量
+    averageEnergy := totalEnergy / 5
+    for elem, state := range f.state.elements {
+        state.Energy = averageEnergy
+        if err := f.components.states[elem].SetEnergy(averageEnergy); err != nil {
+            return err
         }
     }
+
+    f.state.cycle = NoCycle
+    return f.updateElementStates()
 }
 
-// updateQuantumStates 更新量子态
-func (wx *WuXingFlow) updateQuantumStates() {
-    totalEnergy := wx.state.Energy
-    
-    for phase, state := range wx.states {
-        probability := wx.energies[phase] / totalEnergy
-        state.SetProbability(probability)
-        state.Evolve(phase.String())
+// transferEnergy 转移能量
+func (f *WuXingFlow) transferEnergy(from, to Element, amount float64) error {
+    // 更新能量
+    f.state.elements[from].Energy -= amount
+    f.state.elements[to].Energy += amount
+
+    // 更新量子态
+    if err := f.components.states[from].SetEnergy(f.state.elements[from].Energy); err != nil {
+        return err
     }
-    
-    // 更新整体量子态
-    dominantPhase := wx.state.Properties["dominant"].(WuXingPhase)
-    wx.quantum.SetPhase(float64(dominantPhase) * CycleLength / PhaseCount)
-    wx.quantum.Evolve("wuxing")
+    if err := f.components.states[to].SetEnergy(f.state.elements[to].Energy); err != nil {
+        return err
+    }
+
+    // 更新能量网络
+    return f.components.network.UpdateFlow(string(from), string(to), amount)
 }
 
-// updateFields 更新场
-func (wx *WuXingFlow) updateFields() {
-    totalEnergy := wx.state.Energy
-    
-    for phase, field := range wx.fields {
-        strength := wx.energies[phase] / totalEnergy
-        field.SetStrength(strength)
-        field.SetPhase(wx.states[phase].GetPhase())
-        field.Evolve()
-    }
-    
-    // 更新统一场
-    avgStrength := 0.0
-    for _, field := range wx.fields {
-        avgStrength += field.GetStrength()
-    }
-    wx.field.SetStrength(avgStrength / PhaseCount)
-    wx.field.Evolve()
-}
+// updateElementStates 更新元素状态
+func (f *WuXingFlow) updateElementStates() error {
+    totalStrength := 0.0
 
-// updateModelState 更新模型状态
-func (wx *WuXingFlow) updateModelState() {
-    // 更新状态属性
-    for phase, energy := range wx.energies {
-        wx.state.Properties[phase.String()] = energy
-    }
-    
-    // 更新主导相位
-    maxEnergy := 0.0
-    dominant := wx.state.Properties["dominant"].(WuXingPhase)
-    
-    for phase, energy := range wx.energies {
-        if energy > maxEnergy {
-            maxEnergy = energy
-            dominant = phase
+    // 更新每个元素的状态
+    for elem, state := range f.state.elements {
+        // 更新场
+        if err := f.components.fields[elem].Update(state.Energy); err != nil {
+            return err
+        }
+
+        // 计算元素强度
+        strength := f.calculateElementStrength(elem)
+        totalStrength += strength
+
+        // 更新相互作用
+        for other := range f.state.elements {
+            if elem != other {
+                relation := f.calculateRelation(elem, other)
+                state.Relations[other] = relation
+            }
         }
     }
+
+    // 更新整体强度
+    f.state.strength = totalStrength / 5
+
+    return nil
+}
+
+// calculateElementStrength 计算元素强度
+func (f *WuXingFlow) calculateElementStrength(elem Element) float64 {
+    state := f.state.elements[elem]
+    field := f.components.fields[elem]
     
-    wx.state.Properties["dominant"] = dominant
-    wx.state.UpdateTime = time.Now()
+    // 综合考虑能量、场强和量子态
+    energyFactor := state.Energy / MaxElementEnergy
+    fieldStrength := field.GetStrength()
+    quantumCoherence := f.components.states[elem].GetCoherence()
+    
+    return (energyFactor + fieldStrength + quantumCoherence) / 3
 }
 
-// GetPhaseEnergy 获取相位能量
-func (wx *WuXingFlow) GetPhaseEnergy(phase WuXingPhase) float64 {
-    wx.mu.RLock()
-    defer wx.mu.RUnlock()
-    return wx.energies[phase]
+// calculateRelation 计算元素关系
+func (f *WuXingFlow) calculateRelation(elem1, elem2 Element) float64 {
+    // 实现元素间关系计算逻辑
+    return 0.0
 }
 
-// GetDominantPhase 获取主导相位
-func (wx *WuXingFlow) GetDominantPhase() WuXingPhase {
-    wx.mu.RLock()
-    defer wx.mu.RUnlock()
-    return wx.state.Properties["dominant"].(WuXingPhase)
+// Close 关闭模型
+func (f *WuXingFlow) Close() error {
+    f.mu.Lock()
+    defer f.mu.Unlock()
+
+    // 清理组件
+    for elem := range f.components.fields {
+        f.components.fields[elem] = nil
+        f.components.states[elem] = nil
+    }
+    f.components.network = nil
+    f.components.interaction = nil
+
+    return f.BaseFlowModel.Close()
 }
