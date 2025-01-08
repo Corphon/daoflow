@@ -21,7 +21,7 @@ type StateManager struct {
     internal struct {
         quantum *core.QuantumState  // 量子态
         field   *core.Field        // 场
-        energy  *core.Energy       // 能量
+        energy  *core.EnergySystem       // 能量
     }
 
     // 状态转换器
