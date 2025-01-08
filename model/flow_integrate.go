@@ -88,7 +88,7 @@ func NewIntegrateFlow() *IntegrateFlow {
     yy := NewYinYangFlow()
     wx := NewWuXingFlow()
     bg := NewBaGuaFlow(wx, yy)
-    gz := NewGanZhiFlow(wx, yy)
+    gz := NewGanZhiFlow(wx)
     
     iflow := &IntegrateFlow{
         BaseFlowModel: NewBaseFlowModel(ModelIntegrate, SystemCapacity),
