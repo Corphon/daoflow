@@ -3,7 +3,7 @@
 package model
 
 import (
-    "math"
+    "sync"
     "time"
 
     "github.com/Corphon/daoflow/core"
@@ -11,300 +11,277 @@ import (
 
 // BaGuaConstants 八卦常数
 const (
-    TrigramCount = 8         // 八卦数量
-    LayerCount   = 3         // 三才层数
-    BaseRate     = 0.125     // 基础转换率 (1/8)
-    SyncRate     = 0.2       // 同步率
-    PhaseShift   = math.Pi/4 // 相位偏移
+    MaxTrigramEnergy = 12.5   // 每个卦象最大能量
+    ChangeThreshold  = 0.2    // 变化阈值
+    ResonanceRate   = 0.08   // 共振率
 )
 
-// BaGuaTrigram 八卦卦象
-type BaGuaTrigram uint8
+// Trigram 卦象
+type Trigram uint8
 
 const (
-    Qian BaGuaTrigram = iota // 乾
-    Dui                      // 兑
-    Li                       // 离
-    Zhen                     // 震
-    Xun                      // 巽
-    Kan                      // 坎
-    Gen                      // 艮
-    Kun                      // 坤
+    Qian Trigram = iota // 乾 ☰
+    Dui                 // 兑 ☱
+    Li                  // 离 ☲
+    Zhen               // 震 ☳
+    Xun                // 巽 ☴
+    Kan                // 坎 ☵
+    Gen                // 艮 ☶
+    Kun                // 坤 ☷
 )
 
 // BaGuaFlow 八卦模型
 type BaGuaFlow struct {
-    *BaseFlowModel
+    *BaseFlowModel // 继承基础模型
 
-    // 依赖的五行模型
-    wuxing *WuXingFlow
+    // 八卦状态 - 内部使用
+    state struct {
+        trigrams    map[Trigram]*TrigramState
+        resonance   float64
+        harmony     float64
+        changes     []Change
+    }
 
-    // 八卦状态
-    trigrams map[BaGuaTrigram]*TrigramState
+    // 内部组件 - 使用 core 层功能
+    components struct {
+        fields      map[Trigram]*core.Field        // 卦象场
+        states      map[Trigram]*core.QuantumState // 量子态
+        resonator   *core.Resonator               // 共振器
+        correlator  *core.Correlator              // 关联器
+    }
 
-    // 八卦场
-    fields map[BaGuaTrigram]*core.Field
-
-    // 八卦量子态
-    states map[BaGuaTrigram]*core.QuantumState
+    mu sync.RWMutex
 }
 
 // TrigramState 卦象状态
 type TrigramState struct {
-    Trigram    BaGuaTrigram
     Energy     float64
-    Yao        [3]bool     // 三爻状态
-    Nature     Nature      // 阴阳属性
-    Element    WuXingPhase // 对应五行
+    Lines      [3]bool    // 三爻状态
+    Resonance  float64
+    Relations  map[Trigram]float64
+    LastChange time.Time
 }
+
+// Change 变化记录
+type Change struct {
+    From      Trigram
+    To        Trigram
+    Type      ChangeType
+    Timestamp time.Time
+}
+
+// ChangeType 变化类型
+type ChangeType uint8
+
+const (
+    NoChange ChangeType = iota
+    NaturalChange      // 自然变化
+    ForcedChange       // 强制变化
+    ResonantChange     // 共振变化
+)
 
 // NewBaGuaFlow 创建八卦模型
-func NewBaGuaFlow(wuxing *WuXingFlow) *BaGuaFlow {
-    base := NewBaseFlowModel(ModelBaGua, 800.0)
-    
-    bg := &BaGuaFlow{
+func NewBaGuaFlow() *BaGuaFlow {
+    // 创建基础模型
+    base := NewBaseFlowModel(ModelBaGua, MaxTrigramEnergy*8)
+
+    // 创建八卦模型
+    flow := &BaGuaFlow{
         BaseFlowModel: base,
-        wuxing:        wuxing,
-        trigrams:      make(map[BaGuaTrigram]*TrigramState),
-        fields:        make(map[BaGuaTrigram]*core.Field),
-        states:        make(map[BaGuaTrigram]*core.QuantumState),
     }
 
-    // 初始化八卦
-    bg.initializeTrigrams()
-    
-    // 初始化场
-    bg.initializeFields()
-    
-    // 初始化量子态
-    bg.initializeQuantumStates()
+    // 初始化状态
+    flow.state.trigrams = make(map[Trigram]*TrigramState)
+    flow.initializeTrigrams()
 
-    return bg
+    // 初始化组件
+    flow.initializeComponents()
+
+    return flow
 }
 
-// initializeTrigrams 初始化八卦
-func (bg *BaGuaFlow) initializeTrigrams() {
-    // 初始化能量
-    baseEnergy := bg.capacity / TrigramCount
-
-    // 八卦定义及其属性
-    trigramDefs := []struct {
-        trigram BaGuaTrigram
-        yao     [3]bool
-        nature  Nature
-        element WuXingPhase
-    }{
-        {Qian, [3]bool{true, true, true}, NatureYang, Metal},
-        {Dui, [3]bool{true, true, false}, NatureYin, Metal},
-        {Li, [3]bool{true, false, true}, NatureYang, Fire},
-        {Zhen, [3]bool{false, false, true}, NatureYang, Wood},
-        {Xun, [3]bool{true, false, false}, NatureYin, Wood},
-        {Kan, [3]bool{false, true, false}, NatureYin, Water},
-        {Gen, [3]bool{false, true, true}, NatureYang, Earth},
-        {Kun, [3]bool{false, false, false}, NatureYin, Earth},
-    }
-
-    for _, def := range trigramDefs {
-        bg.trigrams[def.trigram] = &TrigramState{
-            Trigram: def.trigram,
-            Energy:  baseEnergy,
-            Yao:     def.yao,
-            Nature:  def.nature,
-            Element: def.element,
+// initializeTrigrams 初始化卦象
+func (f *BaGuaFlow) initializeTrigrams() {
+    trigrams := []Trigram{Qian, Dui, Li, Zhen, Xun, Kan, Gen, Kun}
+    for _, tri := range trigrams {
+        f.state.trigrams[tri] = &TrigramState{
+            Energy:    MaxTrigramEnergy / 8,
+            Lines:     [3]bool{},
+            Resonance: 0,
+            Relations: make(map[Trigram]float64),
+            LastChange: time.Now(),
         }
     }
 }
 
-// initializeFields 初始化场
-func (bg *BaGuaFlow) initializeFields() {
-    for trigram := range bg.trigrams {
-        bg.fields[trigram] = core.NewField()
-        bg.fields[trigram].SetPhase(float64(trigram) * PhaseShift)
+// initializeComponents 初始化组件
+func (f *BaGuaFlow) initializeComponents() {
+    // 初始化场和量子态
+    f.components.fields = make(map[Trigram]*core.Field)
+    f.components.states = make(map[Trigram]*core.QuantumState)
+
+    for tri := range f.state.trigrams {
+        f.components.fields[tri] = core.NewField()
+        f.components.states[tri] = core.NewQuantumState()
     }
+
+    // 初始化共振器和关联器
+    f.components.resonator = core.NewResonator()
+    f.components.correlator = core.NewCorrelator()
 }
 
-// initializeQuantumStates 初始化量子态
-func (bg *BaGuaFlow) initializeQuantumStates() {
-    for trigram := range bg.trigrams {
-        bg.states[trigram] = core.NewQuantumState()
-        bg.states[trigram].Initialize()
+// Start 启动模型
+func (f *BaGuaFlow) Start() error {
+    if err := f.BaseFlowModel.Start(); err != nil {
+        return err
     }
+
+    return f.initializeBaGua()
 }
 
-// Transform 八卦转换
-func (bg *BaGuaFlow) Transform(pattern TransformPattern) error {
-    bg.mu.Lock()
-    defer bg.mu.Unlock()
+// initializeBaGua 初始化八卦
+func (f *BaGuaFlow) initializeBaGua() error {
+    f.mu.Lock()
+    defer f.mu.Unlock()
 
-    if !bg.running {
-        return NewModelError(ErrCodeOperation, "model not running", nil)
+    // 初始化场
+    for _, field := range f.components.fields {
+        if err := field.Initialize(); err != nil {
+            return WrapError(err, ErrCodeOperation, "failed to initialize field")
+        }
     }
+
+    // 初始化量子态
+    for _, state := range f.components.states {
+        if err := state.Initialize(); err != nil {
+            return WrapError(err, ErrCodeOperation, "failed to initialize quantum state")
+        }
+    }
+
+    // 初始化共振器
+    return f.components.resonator.Initialize()
+}
+
+// Transform 执行八卦转换
+func (f *BaGuaFlow) Transform(pattern TransformPattern) error {
+    if err := f.BaseFlowModel.Transform(pattern); err != nil {
+        return err
+    }
+
+    f.mu.Lock()
+    defer f.mu.Unlock()
 
     switch pattern {
-    case PatternNormal:
-        bg.naturalTransform()
-    case PatternForward:
-        bg.forwardTransform()
-    case PatternReverse:
-        bg.reverseTransform()
     case PatternBalance:
-        bg.balanceTransform()
-    case PatternMutate:
-        bg.mutateTransform()
+        return f.balanceTrigrams()
+    case PatternForward:
+        return f.naturalTransform()
+    case PatternReverse:
+        return f.resonantTransform()
     default:
-        return NewModelError(ErrCodeOperation, "invalid transform pattern", nil)
-    }
-
-    // 同步五行模型
-    bg.synchronizeWithWuXing()
-    
-    // 更新量子态
-    bg.updateQuantumStates()
-    
-    // 更新场
-    bg.updateFields()
-    
-    // 更新状态
-    bg.updateModelState()
-
-    return nil
-}
-
-// naturalTransform 自然转换
-func (bg *BaGuaFlow) naturalTransform() {
-    for _, state := range bg.trigrams {
-        // 量子态演化
-        qstate := bg.states[state.Trigram]
-        qstate.Evolve(state.Trigram.String())
-        
-        // 应用量子涨落
-        fluctuation := qstate.GetFluctuation()
-        state.Energy *= (1 + fluctuation)
-        
-        // 爻位变换
-        bg.transformYao(state)
+        return f.adaptiveTransform()
     }
 }
 
-// forwardTransform 顺序转换
-func (bg *BaGuaFlow) forwardTransform() {
-    sequence := []BaGuaTrigram{Qian, Dui, Li, Zhen, Xun, Kan, Gen, Kun}
-    bg.sequentialTransform(sequence)
-}
-
-// reverseTransform 逆序转换
-func (bg *BaGuaFlow) reverseTransform() {
-    sequence := []BaGuaTrigram{Kun, Gen, Kan, Xun, Zhen, Li, Dui, Qian}
-    bg.sequentialTransform(sequence)
-}
-
-// sequentialTransform 序列转换
-func (bg *BaGuaFlow) sequentialTransform(sequence []BaGuaTrigram) {
-    for i := 0; i < len(sequence)-1; i++ {
-        current := bg.trigrams[sequence[i]]
-        next := bg.trigrams[sequence[i+1]]
-        
-        transferEnergy := current.Energy * BaseRate
-        current.Energy -= transferEnergy
-        next.Energy += transferEnergy
+// balanceTrigrams 平衡卦象
+func (f *BaGuaFlow) balanceTrigrams() error {
+    // 计算总能量
+    totalEnergy := 0.0
+    for _, state := range f.state.trigrams {
+        totalEnergy += state.Energy
     }
-}
 
-// balanceTransform 平衡转换
-func (bg *BaGuaFlow) balanceTransform() {
-    averageEnergy := bg.state.Energy / TrigramCount
-    
-    for _, state := range bg.trigrams {
+    // 平均分配能量
+    averageEnergy := totalEnergy / 8
+    for tri, state := range f.state.trigrams {
         state.Energy = averageEnergy
+        if err := f.components.states[tri].SetEnergy(averageEnergy); err != nil {
+            return err
+        }
     }
+
+    return f.updateTrigramStates()
 }
 
-// mutateTransform 变异转换
-func (bg *BaGuaFlow) mutateTransform() {
-    for _, state := range bg.trigrams {
-        // 获取量子涨落
-        fluctuation := bg.states[state.Trigram].GetFluctuation()
-        
-        // 变异爻位
-        for i := range state.Yao {
-            if math.Abs(fluctuation) > 0.5 {
-                state.Yao[i] = !state.Yao[i]
+// naturalTransform 自然变化
+func (f *BaGuaFlow) naturalTransform() error {
+    for tri, state := range f.state.trigrams {
+        // 检查能量阈值
+        if state.Energy > ChangeThreshold*MaxTrigramEnergy {
+            // 寻找相应变化卦
+            targetTri := f.findNaturalChange(tri)
+            if targetTri != tri {
+                if err := f.changeTrigram(tri, targetTri, NaturalChange); err != nil {
+                    return err
+                }
             }
         }
-        
-        // 调整能量
-        state.Energy *= (1 + fluctuation)
     }
+    return f.updateTrigramStates()
 }
 
-// transformYao 爻位变换
-func (bg *BaGuaFlow) transformYao(state *TrigramState) {
-    // 基于量子态概率变换爻位
-    for i := range state.Yao {
-        if bg.states[state.Trigram].GetProbability() > 0.5 {
-            state.Yao[i] = !state.Yao[i]
+// resonantTransform 共振变化
+func (f *BaGuaFlow) resonantTransform() error {
+    // 更新共振器
+    if err := f.components.resonator.Update(); err != nil {
+        return err
+    }
+
+    // 检查共振条件
+    resonatingPairs := f.findResonatingPairs()
+    for _, pair := range resonatingPairs {
+        if err := f.applyResonance(pair[0], pair[1]); err != nil {
+            return err
         }
     }
+
+    return f.updateTrigramStates()
 }
 
-// synchronizeWithWuXing 与五行同步
-func (bg *BaGuaFlow) synchronizeWithWuXing() {
-    if bg.wuxing == nil {
-        return
-    }
+// adaptiveTransform 适应性变化
+func (f *BaGuaFlow) adaptiveTransform() error {
+    // 计算系统熵
+    entropy := f.calculateSystemEntropy()
 
-    // 同步能量
-    for _, state := range bg.trigrams {
-        elementEnergy := bg.wuxing.GetElementEnergy(state.Element)
-        syncEnergy := elementEnergy * SyncRate
-        state.Energy = (state.Energy + syncEnergy) / 2
+    // 根据熵值调整变化
+    if entropy > ChangeThreshold {
+        return f.naturalTransform()
     }
+    return f.resonantTransform()
 }
 
-// updateQuantumStates 更新量子态
-func (bg *BaGuaFlow) updateQuantumStates() {
-    totalEnergy := bg.state.Energy
-    
-    for trigram, state := range bg.trigrams {
-        probability := state.Energy / totalEnergy
-        bg.states[trigram].SetProbability(probability)
-        bg.states[trigram].SetPhase(float64(trigram) * PhaseShift)
-        bg.states[trigram].Evolve(trigram.String())
+// updateTrigramStates 更新卦象状态
+func (f *BaGuaFlow) updateTrigramStates() error {
+    // 更新量子态
+    for tri, state := range f.components.states {
+        if err := state.Update(); err != nil {
+            return err
+        }
+        // 更新卦象能量
+        f.state.trigrams[tri].Energy = state.GetEnergy()
     }
-}
 
-// updateFields 更新场
-func (bg *BaGuaFlow) updateFields() {
-    totalEnergy := bg.state.Energy
-    
-    for trigram, state := range bg.trigrams {
-        field := bg.fields[trigram]
-        field.SetStrength(state.Energy / totalEnergy)
-        field.SetPhase(bg.states[trigram].GetPhase())
-        field.Evolve()
-    }
-}
+    // 更新共振度
+    f.state.resonance = f.components.resonator.GetResonance()
 
-// updateModelState 更新模型状态
-func (bg *BaGuaFlow) updateModelState() {
-    // 更新状态属性
-    for trigram, state := range bg.trigrams {
-        prefix := trigram.String()
-        bg.state.Properties[prefix+"Energy"] = state.Energy
-        bg.state.Properties[prefix+"Yao"] = state.Yao
-    }
-    
-    bg.state.Phase = PhaseBaGua
-    bg.state.UpdateTime = time.Now()
-}
+    // 更新和谐度
+    f.state.harmony = f.calculateHarmony()
 
-// GetTrigramState 获取卦象状态
-func (bg *BaGuaFlow) GetTrigramState(trigram BaGuaTrigram) *TrigramState {
-    bg.mu.RLock()
-    defer bg.mu.RUnlock()
-    
-    if state, exists := bg.trigrams[trigram]; exists {
-        return state
-    }
     return nil
+}
+
+// Close 关闭模型
+func (f *BaGuaFlow) Close() error {
+    f.mu.Lock()
+    defer f.mu.Unlock()
+
+    // 清理组件
+    for tri := range f.components.fields {
+        f.components.fields[tri] = nil
+        f.components.states[tri] = nil
+    }
+    f.components.resonator = nil
+    f.components.correlator = nil
+
+    return f.BaseFlowModel.Close()
 }
