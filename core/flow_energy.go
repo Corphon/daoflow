@@ -164,12 +164,7 @@ func (es *EnergySystem) calculateBalance() {
     
     // 计算能量分布的标准差
     mean := totalEnergy / 4
-    variance := (
-        math.Pow(es.potential-mean, 2) +
-        math.Pow(es.kinetic-mean, 2) +
-        math.Pow(es.thermal-mean, 2) +
-        math.Pow(es.field-mean, 2)
-    ) / 4
+    variance := (math.Pow(es.potential-mean, 2) + math.Pow(es.kinetic-mean, 2) + math.Pow(es.thermal-mean, 2) + math.Pow(es.field-mean, 2)) / 4
     
     // 平衡度 = 1 / (1 + 标准差/总能量)
     es.balance = 1 / (1 + math.Sqrt(variance)/totalEnergy)
