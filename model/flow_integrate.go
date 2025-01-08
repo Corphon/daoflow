@@ -3,7 +3,6 @@
 package model
 
 import (
-    "math"
     "sync"
     "time"
 
@@ -12,275 +11,312 @@ import (
 
 // IntegrateConstants 集成常数
 const (
-    SystemCapacity    = 2000.0      // 系统总容量
-    IntegrationCycle  = time.Minute // 集成周期
-    BalanceThreshold  = 0.15        // 平衡阈值
-    ResonanceMinimum = 0.3         // 最小共振阈值
-    SystemLayers     = 4           // 系统层数(阴阳、五行、八卦、干支)
+    IntegrateSyncRate = 0.2     // 同步率
+    IntegrateBalance = 0.25     // 平衡系数
+    ResonanceThreshold = 0.8    // 共振阈值
 )
 
-// FlowSystem 流系统状态
-type FlowSystem struct {
-    Energy     float64   // 系统能量
-    Entropy    float64   // 系统熵
-    Harmony    float64   // 和谐度
-    Balance    float64   // 平衡度
-    Coherence  float64   // 相干度
-    Phase      float64   // 系统相位
-}
-
-// IntegrateFlow 集成模型
+// IntegrateFlow 集成流模型
 type IntegrateFlow struct {
     *BaseFlowModel
-    
-    // 子系统
-    yinyang  *YinYangFlow
-    wuxing   *WuXingFlow
-    bagua    *BaGuaFlow
-    ganzhi   *GanZhiFlow
-    
+    mu sync.RWMutex
+
+    // 子模型
+    yinyang *YinYangFlow
+    wuxing  *WuXingFlow
+    bagua   *BaGuaFlow
+    ganzhi  *GanZhiFlow
+
+    // 统一场
+    unifiedField *core.Field
+
+    // 量子纠缠态
+    entangledState *core.QuantumState
+
     // 系统状态
-    system   FlowSystem
-    
-    // 核心组件
-    coreField    *core.UnifiedField    // 统一场
-    coreQuantum  *core.QuantumSystem   // 量子系统
-    
-    // 状态追踪
-    stateHistory []SystemState
-    transitions  chan StateTransition
+    systemState SystemState
 }
 
 // SystemState 系统状态
 type SystemState struct {
+    Energy     float64
+    Entropy    float64
+    Harmony    float64
+    Balance    float64
+    Phase      Phase
     Timestamp  time.Time
-    System     FlowSystem
-    YinYang    ModelState
-    WuXing     ModelState
-    BaGua      ModelState
-    GanZhi     ModelState
 }
 
 // NewIntegrateFlow 创建集成流模型
 func NewIntegrateFlow() *IntegrateFlow {
-    // 创建子系统
-    yy := NewYinYangFlow()
-    wx := NewWuXingFlow()
-    bg := NewBaGuaFlow(wx)
-    gz := NewGanZhiFlow(wx)
+    base := NewBaseFlowModel(ModelIntegrate, 2000.0)
     
-    iflow := &IntegrateFlow{
-        BaseFlowModel: NewBaseFlowModel(ModelIntegrate, SystemCapacity),
-        yinyang:      yy,
-        wuxing:       wx,
-        bagua:        bg,
-        ganzhi:       gz,
-        coreField:    core.NewUnifiedField(SystemLayers),
-        coreQuantum:  core.NewQuantumSystem(SystemLayers),
-        transitions:  make(chan StateTransition, 100),
-    }
-    
-    // 初始化系统状态
-    iflow.system = FlowSystem{
-        Energy:    SystemCapacity * 0.5,
-        Entropy:   0,
-        Harmony:   1.0,
-        Balance:   1.0,
-        Coherence: 1.0,
-        Phase:     0,
-    }
-    
-    go iflow.runIntegration()
-    return iflow
-}
+    // 创建子模型
+    yinyang := NewYinYangFlow()
+    wuxing := NewWuXingFlow()
+    bagua := NewBaGuaFlow(wuxing)
+    ganzhi := NewGanZhiFlow(wuxing)
 
-// runIntegration 运行系统集成
-func (if *IntegrateFlow) runIntegration() {
-    ticker := time.NewTicker(IntegrationCycle)
-    defer ticker.Stop()
-
-    for {
-        select {
-        case <-if.done:
-            return
-        case <-ticker.C:
-            if.integrate()
-        case transition := <-if.transitions:
-            if.handleTransition(transition)
-        }
+    return &IntegrateFlow{
+        BaseFlowModel:  base,
+        yinyang:       yinyang,
+        wuxing:        wuxing,
+        bagua:         bagua,
+        ganzhi:        ganzhi,
+        unifiedField:  core.NewField(),
+        entangledState: core.NewQuantumState(),
+        systemState:   SystemState{
+            Energy:    0,
+            Entropy:   0,
+            Harmony:   1,
+            Balance:   1,
+            Phase:     PhaseNone,
+            Timestamp: time.Now(),
+        },
     }
 }
 
-// integrate 执行系统集成
-func (if *IntegrateFlow) integrate() {
+// Start 启动集成模型
+func (if *IntegrateFlow) Start() error {
     if.mu.Lock()
     defer if.mu.Unlock()
 
-    // 收集子系统状态
-    states := if.collectSystemStates()
+    if if.running {
+        return NewModelError(ErrCodeOperation, "model already started", nil)
+    }
+
+    // 启动子模型
+    if err := if.yinyang.Start(); err != nil {
+        return err
+    }
+    if err := if.wuxing.Start(); err != nil {
+        return err
+    }
+    if err := if.bagua.Start(); err != nil {
+        return err
+    }
+    if err := if.ganzhi.Start(); err != nil {
+        return err
+    }
+
+    // 初始化统一场
+    if.unifiedField.Initialize()
     
-    // 计算量子态演化
-    if.evolveQuantumStates(states)
+    // 初始化量子纠缠态
+    if.entangledState.Initialize()
     
+    if.running = true
+    return nil
+}
+
+// Stop 停止集成模型
+func (if *IntegrateFlow) Stop() error {
+    if.mu.Lock()
+    defer if.mu.Unlock()
+
+    if !if.running {
+        return NewModelError(ErrCodeOperation, "model not running", nil)
+    }
+
+    // 停止子模型
+    if err := if.yinyang.Stop(); err != nil {
+        return err
+    }
+    if err := if.wuxing.Stop(); err != nil {
+        return err
+    }
+    if err := if.bagua.Stop(); err != nil {
+        return err
+    }
+    if err := if.ganzhi.Stop(); err != nil {
+        return err
+    }
+
+    if.running = false
+    return nil
+}
+
+// Transform 集成转换
+func (if *IntegrateFlow) Transform(pattern TransformPattern) error {
+    if.mu.Lock()
+    defer if.mu.Unlock()
+
+    if !if.running {
+        return NewModelError(ErrCodeOperation, "model not running", nil)
+    }
+
+    // 转换子模型
+    if err := if.yinyang.Transform(pattern); err != nil {
+        return err
+    }
+    if err := if.wuxing.Transform(pattern); err != nil {
+        return err
+    }
+    if err := if.bagua.Transform(pattern); err != nil {
+        return err
+    }
+    if err := if.ganzhi.Transform(pattern); err != nil {
+        return err
+    }
+
+    // 同步子模型
+    if.synchronizeModels()
+    
+    // 更新量子态
+    if.updateQuantumStates()
+    
+    // 更新场
+    if.updateFields()
+    
+    // 更新系统状态
+    if.updateSystemState()
+
+    return nil
+}
+
+// synchronizeModels 同步子模型
+func (if *IntegrateFlow) synchronizeModels() {
+    // 阴阳与五行同步
+    yinYangState := if.yinyang.GetState()
+    wuxingState := if.wuxing.GetState()
+    
+    syncEnergy := math.Min(yinYangState.Energy, wuxingState.Energy) * IntegrateSyncRate
+    if.yinyang.AdjustEnergy(syncEnergy)
+    if.wuxing.AdjustEnergy(syncEnergy)
+
+    // 八卦与干支同步
+    baguaState := if.bagua.GetState()
+    ganzhiState := if.ganzhi.GetState()
+    
+    syncEnergy = math.Min(baguaState.Energy, ganzhiState.Energy) * IntegrateSyncRate
+    if.bagua.AdjustEnergy(syncEnergy)
+    if.ganzhi.AdjustEnergy(syncEnergy)
+}
+
+// updateQuantumStates 更新量子态
+func (if *IntegrateFlow) updateQuantumStates() {
+    // 更新纠缠态
+    yinYangProb := if.yinyang.GetState().Energy / if.capacity
+    wuxingProb := if.wuxing.GetState().Energy / if.capacity
+    baguaProb := if.bagua.GetState().Energy / if.capacity
+    ganzhiProb := if.ganzhi.GetState().Energy / if.capacity
+    
+    avgProb := (yinYangProb + wuxingProb + baguaProb + ganzhiProb) / 4
+    if.entangledState.SetProbability(avgProb)
+    if.entangledState.Evolve("integrate")
+}
+
+// updateFields 更新场
+func (if *IntegrateFlow) updateFields() {
     // 更新统一场
-    if.updateUnifiedField(states)
-    
-    // 计算系统特性
-    if.calculateSystemProperties(states)
-    
-    // 进行能量再分配
-    if.redistributeEnergy()
-    
-    // 记录状态
-    if.recordState(states)
+    totalStrength := (if.yinyang.field.GetStrength() +
+                     if.wuxing.field.GetStrength() +
+                     if.bagua.field.GetStrength() +
+                     if.ganzhi.field.GetStrength()) / 4
+                     
+    if.unifiedField.SetStrength(totalStrength)
+    if.unifiedField.SetPhase(if.entangledState.GetPhase())
+    if.unifiedField.Evolve()
 }
 
-// collectSystemStates 收集系统状态
-func (if *IntegrateFlow) collectSystemStates() SystemState {
-    return SystemState{
-        Timestamp: time.Now(),
-        System:    if.system,
-        YinYang:   if.yinyang.GetState(),
-        WuXing:    if.wuxing.GetState(),
-        BaGua:     if.bagua.GetState(),
-        GanZhi:    if.ganzhi.GetState(),
-    }
-}
-
-// evolveQuantumStates 演化量子态
-func (if *IntegrateFlow) evolveQuantumStates(states SystemState) {
-    // 构建量子态向量
-    stateVector := []float64{
-        states.YinYang.Energy / if.system.Energy,
-        states.WuXing.Energy / if.system.Energy,
-        states.BaGua.Energy / if.system.Energy,
-        states.GanZhi.Energy / if.system.Energy,
-    }
-    
-    // 应用量子演化
-    if.coreQuantum.Evolve(stateVector, IntegrationCycle)
-}
-
-// updateUnifiedField 更新统一场
-func (if *IntegrateFlow) updateUnifiedField(states SystemState) {
-    // 更新场强度
-    fieldStrengths := []float64{
-        states.YinYang.Energy / SystemCapacity,
-        states.WuXing.Energy / SystemCapacity,
-        states.BaGua.Energy / SystemCapacity,
-        states.GanZhi.Energy / SystemCapacity,
-    }
-    
-    if.coreField.UpdateStrengths(fieldStrengths)
-    
-    // 计算场相互作用
-    if.coreField.CalculateInteractions()
-}
-
-// calculateSystemProperties 计算系统特性
-func (if *IntegrateFlow) calculateSystemProperties(states SystemState) {
+// updateSystemState 更新系统状态
+func (if *IntegrateFlow) updateSystemState() {
     // 计算总能量
-    if.system.Energy = states.YinYang.Energy +
-                      states.WuXing.Energy +
-                      states.BaGua.Energy +
-                      states.GanZhi.Energy
-    
-    // 计算系统熵
-    if.system.Entropy = if.calculateEntropy(states)
-    
+    if.systemState.Energy = if.yinyang.GetState().Energy +
+                           if.wuxing.GetState().Energy +
+                           if.bagua.GetState().Energy +
+                           if.ganzhi.GetState().Energy
+
+    // 计算熵
+    if.systemState.Entropy = if.calculateSystemEntropy()
+
     // 计算和谐度
-    if.system.Harmony = if.calculateHarmony(states)
-    
+    if.systemState.Harmony = if.calculateSystemHarmony()
+
     // 计算平衡度
-    if.system.Balance = if.calculateBalance(states)
-    
-    // 计算相干度
-    if.system.Coherence = if.coreQuantum.GetCoherence()
-    
-    // 更新系统相位
-    if.system.Phase = if.coreQuantum.GetGlobalPhase()
+    if.systemState.Balance = if.calculateSystemBalance()
+
+    // 更新时间戳
+    if.systemState.Timestamp = time.Now()
+
+    // 更新模型状态
+    if.state.Energy = if.systemState.Energy
+    if.state.Properties["entropy"] = if.systemState.Entropy
+    if.state.Properties["harmony"] = if.systemState.Harmony
+    if.state.Properties["balance"] = if.systemState.Balance
+    if.state.UpdateTime = if.systemState.Timestamp
 }
 
-// calculateEntropy 计算系统熵
-func (if *IntegrateFlow) calculateEntropy(states SystemState) float64 {
-    // 使用统计熵公式
-    totalEnergy := if.system.Energy
-    if totalEnergy == 0 {
+// calculateSystemEntropy 计算系统熵
+func (if *IntegrateFlow) calculateSystemEntropy() float64 {
+    if if.systemState.Energy <= 0 {
         return 0
     }
-    
-    energies := []float64{
-        states.YinYang.Energy,
-        states.WuXing.Energy,
-        states.BaGua.Energy,
-        states.GanZhi.Energy,
-    }
-    
-    var entropy float64
-    for _, e := range energies {
-        if e > 0 {
-            p := e / totalEnergy
-            entropy -= p * math.Log(p)
-        }
-    }
-    
-    return entropy
+
+    // 使用量子态计算熵
+    return -if.entangledState.GetProbability() * math.Log(if.entangledState.GetProbability())
 }
 
-// calculateHarmony 计算和谐度
-func (if *IntegrateFlow) calculateHarmony(states SystemState) float64 {
-    // 基于场的相互作用计算和谐度
-    return if.coreField.GetHarmony()
+// calculateSystemHarmony 计算系统和谐度
+func (if *IntegrateFlow) calculateSystemHarmony() float64 {
+    // 基于场强度计算和谐度
+    fieldStrength := if.unifiedField.GetStrength()
+    return math.Min(1.0, fieldStrength/ResonanceThreshold)
 }
 
-// calculateBalance 计算平衡度
-func (if *IntegrateFlow) calculateBalance(states SystemState) float64 {
-    // 计算能量分布的均匀程度
-    mean := if.system.Energy / float64(SystemLayers)
-    var variance float64
-    
-    energies := []float64{
-        states.YinYang.Energy,
-        states.WuXing.Energy,
-        states.BaGua.Energy,
-        states.GanZhi.Energy,
+// calculateSystemBalance 计算系统平衡度
+func (if *IntegrateFlow) calculateSystemBalance() float64 {
+    if if.systemState.Energy <= 0 {
+        return 1
     }
-    
-    for _, e := range energies {
-        diff := e - mean
+
+    // 计算各子系统能量比例的方差
+    totalEnergy := if.systemState.Energy
+    energyRatios := []float64{
+        if.yinyang.GetState().Energy / totalEnergy,
+        if.wuxing.GetState().Energy / totalEnergy,
+        if.bagua.GetState().Energy / totalEnergy,
+        if.ganzhi.GetState().Energy / totalEnergy,
+    }
+
+    variance := 0.0
+    meanRatio := 0.25 // 理想平均比例
+    for _, ratio := range energyRatios {
+        diff := ratio - meanRatio
         variance += diff * diff
     }
-    
-    variance /= float64(SystemLayers)
-    return 1 / (1 + math.Sqrt(variance))
-}
+    variance /= 4
 
-// redistributeEnergy 重新分配能量
-func (if *IntegrateFlow) redistributeEnergy() {
-    if if.system.Balance < BalanceThreshold {
-        // 获取量子态概率分布
-        probs := if.coreQuantum.GetProbabilities()
-        
-        // 按概率分配能量
-        totalEnergy := if.system.Energy
-        if.yinyang.AdjustEnergy(totalEnergy * probs[0])
-        if.wuxing.AdjustEnergy(totalEnergy * probs[1])
-        if.bagua.AdjustEnergy(totalEnergy * probs[2])
-        if.ganzhi.AdjustEnergy(totalEnergy * probs[3])
-    }
-}
-
-// recordState 记录状态
-func (if *IntegrateFlow) recordState(state SystemState) {
-    if.stateHistory = append(if.stateHistory, state)
-    if len(if.stateHistory) > 1000 {
-        if.stateHistory = if.stateHistory[1:]
-    }
+    // 转换为平衡度（0-1）
+    return 1 - math.Min(1, variance/IntegrateBalance)
 }
 
 // GetSystemState 获取系统状态
-func (if *IntegrateFlow) GetSystemState() FlowSystem {
+func (if *IntegrateFlow) GetSystemState() SystemState {
     if.mu.RLock()
     defer if.mu.RUnlock()
-    return if.system
+    return if.systemState
+}
+
+// Close 关闭集成模型
+func (if *IntegrateFlow) Close() error {
+    if err := if.Stop(); err != nil {
+        return err
+    }
+
+    // 关闭子模型
+    if err := if.yinyang.Close(); err != nil {
+        return err
+    }
+    if err := if.wuxing.Close(); err != nil {
+        return err
+    }
+    if err := if.bagua.Close(); err != nil {
+        return err
+    }
+    if err := if.ganzhi.Close(); err != nil {
+        return err
+    }
+
+    return if.BaseFlowModel.Close()
 }
