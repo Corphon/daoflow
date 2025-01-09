@@ -49,24 +49,69 @@ func NewQuantumState() *QuantumState {
 }
 
 // Initialize 初始化量子态
-func (qs *QuantumState) Initialize() {
+func (qs *QuantumState) Initialize() error {
 	qs.mu.Lock()
 	defer qs.mu.Unlock()
 
+	// 进行初始化
 	qs.probability = MaxProbability
 	qs.phase = DefaultPhase
 	qs.energy = DefaultEnergy
 	qs.entropy = DefaultEntropy
+
+	// 验证初始化状态
+	if err := qs.validateState(); err != nil {
+		return fmt.Errorf("failed to initialize quantum state: %w", err)
+	}
+
+	return nil
 }
 
-// SetProbability 设置概率幅度
-func (qs *QuantumState) SetProbability(p float64) {
+// validateState 验证量子态
+func (qs *QuantumState) validateState() error {
+	// 验证概率
+	if qs.probability < MinProbability || qs.probability > MaxProbability {
+		return fmt.Errorf("invalid probability: %v", qs.probability)
+	}
+
+	// 验证相位
+	if qs.phase < 0 || qs.phase >= TwoPi {
+		return fmt.Errorf("invalid phase: %v", qs.phase)
+	}
+
+	// 验证能量
+	if qs.energy < 0 {
+		return fmt.Errorf("invalid energy: %v", qs.energy)
+	}
+
+	// 验证熵
+	if qs.entropy < 0 {
+		return fmt.Errorf("invalid entropy: %v", qs.entropy)
+	}
+
+	return nil
+}
+
+// Reset 重置量子态到初始状态
+func (qs *QuantumState) Reset() error {
 	qs.mu.Lock()
 	defer qs.mu.Unlock()
 
-	qs.probability = math.Max(MinProbability, math.Min(MaxProbability, p))
-	// 更新熵
+	return qs.Initialize()
+}
+
+// SetProbability 设置概率幅度
+func (qs *QuantumState) SetProbability(p float64) error {
+	qs.mu.Lock()
+	defer qs.mu.Unlock()
+
+	if p < MinProbability || p > MaxProbability {
+		return fmt.Errorf("probability out of range [%v, %v]: %v", MinProbability, MaxProbability, p)
+	}
+
+	qs.probability = p
 	qs.updateEntropy()
+	return nil
 }
 
 // GetProbability 获取概率幅度
@@ -78,15 +123,18 @@ func (qs *QuantumState) GetProbability() float64 {
 }
 
 // SetPhase 设置量子相位
-func (qs *QuantumState) SetPhase(phase float64) {
+func (qs *QuantumState) SetPhase(phase float64) error {
 	qs.mu.Lock()
 	defer qs.mu.Unlock()
 
 	// 确保相位在 [0, 2π) 范围内
-	qs.phase = math.Mod(phase, TwoPi)
-	if qs.phase < 0 {
-		qs.phase += TwoPi
+	phase = math.Mod(phase, TwoPi)
+	if phase < 0 {
+		phase += TwoPi
 	}
+
+	qs.phase = phase
+	return nil
 }
 
 // GetPhase 获取量子相位
@@ -98,13 +146,17 @@ func (qs *QuantumState) GetPhase() float64 {
 }
 
 // SetEnergy 设置能量水平
-func (qs *QuantumState) SetEnergy(energy float64) {
+func (qs *QuantumState) SetEnergy(energy float64) error {
 	qs.mu.Lock()
 	defer qs.mu.Unlock()
 
-	qs.energy = math.Max(0, energy)
-	// 更新熵
+	if energy < 0 {
+		return fmt.Errorf("energy cannot be negative: %v", energy)
+	}
+
+	qs.energy = energy
 	qs.updateEntropy()
+	return nil
 }
 
 // GetEnergy 获取能量水平
@@ -124,7 +176,7 @@ func (qs *QuantumState) GetEntropy() float64 {
 }
 
 // Evolve 量子态演化
-func (qs *QuantumState) Evolve(pattern QuantumPattern) {
+func (qs *QuantumState) Evolve(pattern QuantumPattern) error {
 	qs.mu.Lock()
 	defer qs.mu.Unlock()
 
@@ -134,26 +186,20 @@ func (qs *QuantumState) Evolve(pattern QuantumPattern) {
 		// 整合模式: 相位变化较大，概率趋于稳定
 		qs.phase += math.Pi / 4
 		qs.probability = math.Pow(qs.probability, 0.9)
-
 	case PatternSplit:
 		// 分裂模式: 相位变化小，概率波动大
 		qs.phase += math.Pi / 8
 		qs.probability *= 0.95
-
 	case PatternCycle:
 		// 循环模式: 相位均匀变化
 		qs.phase += math.Pi / 6
 		qs.probability = 0.5 + 0.5*math.Sin(qs.phase)
-
 	case PatternBalance:
 		// 平衡模式: 概率趋于平衡态
 		qs.phase += math.Pi / 12
 		qs.probability = (qs.probability + 0.5) / 2
-
 	default:
-		// 默认模式: 小幅度演化
-		qs.phase += math.Pi / 16
-		qs.probability = math.Max(0.1, qs.probability)
+		return fmt.Errorf("unknown evolution pattern: %v", pattern)
 	}
 
 	// 确保相位在 [0, 2π) 范围内
@@ -164,28 +210,6 @@ func (qs *QuantumState) Evolve(pattern QuantumPattern) {
 
 	// 确保概率在 [0, 1] 范围内
 	qs.probability = math.Max(MinProbability, math.Min(MaxProbability, qs.probability))
-
-	// 更新熵
-	qs.updateEntropy()
-}
-
-// Entangle 量子纠缠
-// 将当前量子态与另一个量子态纠缠
-func (qs *QuantumState) Entangle(other *QuantumState) error {
-	if other == nil {
-		return ErrInvalidQuantumState
-	}
-
-	qs.mu.Lock()
-	defer qs.mu.Unlock()
-
-	// 计算纠缠态的概率和相位
-	avgProb := (qs.probability + other.GetProbability()) / 2
-	avgPhase := math.Mod((qs.phase+other.GetPhase())/2, TwoPi)
-
-	// 更新当前量子态
-	qs.probability = avgProb
-	qs.phase = avgPhase
 
 	// 更新熵
 	qs.updateEntropy()
@@ -251,15 +275,4 @@ func (qs *QuantumState) GetCoherence() float64 {
 	// 相干性在 [0,1] 范围内
 	coherence := (phaseContribution + 1) * probabilityContribution / 2
 	return math.Max(0, math.Min(1, coherence))
-}
-
-// Reset 重置量子态到初始状态
-func (qs *QuantumState) Reset() {
-	qs.mu.Lock()
-	defer qs.mu.Unlock()
-
-	qs.probability = MaxProbability
-	qs.phase = DefaultPhase
-	qs.energy = DefaultEnergy
-	qs.entropy = DefaultEntropy
 }
