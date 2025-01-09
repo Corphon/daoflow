@@ -236,3 +236,30 @@ func (qs *QuantumState) String() string {
 var (
 	ErrInvalidQuantumState = errors.New("invalid quantum state")
 )
+
+// GetCoherence 获取量子相干性
+// 相干性与概率幅度和相位的稳定性相关
+func (qs *QuantumState) GetCoherence() float64 {
+	qs.mu.RLock()
+	defer qs.mu.RUnlock()
+
+	// 相干性与概率幅度和相位的稳定性相关
+	// 使用概率和相位计算相干性
+	phaseContribution := math.Cos(qs.phase)   // 相位对相干性的贡献
+	probabilityContribution := qs.probability // 概率对相干性的贡献
+
+	// 相干性在 [0,1] 范围内
+	coherence := (phaseContribution + 1) * probabilityContribution / 2
+	return math.Max(0, math.Min(1, coherence))
+}
+
+// Reset 重置量子态到初始状态
+func (qs *QuantumState) Reset() {
+	qs.mu.Lock()
+	defer qs.mu.Unlock()
+
+	qs.probability = MaxProbability
+	qs.phase = DefaultPhase
+	qs.energy = DefaultEnergy
+	qs.entropy = DefaultEntropy
+}
