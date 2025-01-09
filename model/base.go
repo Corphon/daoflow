@@ -265,3 +265,34 @@ func (b *BaseFlowModel) checkRunning() error {
 func (b *BaseFlowModel) getInternalState() (*core.QuantumState, *core.Field, *core.EnergySystem) {
 	return b.components.quantum, b.components.field, b.components.energy
 }
+
+// AdjustEnergy 调整能量 - 基础实现
+func (b *BaseFlowModel) AdjustEnergy(delta float64) error {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+
+	currentEnergy := b.state.Energy
+	newEnergy := currentEnergy + delta
+
+	if !ValidateEnergy(newEnergy) {
+		return NewModelError(ErrCodeOperation, "energy adjustment out of range", nil)
+	}
+
+	// 更新状态
+	b.state.Energy = newEnergy
+	b.state.UpdateTime = time.Now()
+
+	// 更新能量系统
+	energyMap := map[core.EnergyType]float64{
+		core.PotentialEnergy: newEnergy / 4,
+		core.KineticEnergy:   newEnergy / 4,
+		core.ThermalEnergy:   newEnergy / 4,
+		core.FieldEnergy:     newEnergy / 4,
+	}
+
+	if err := b.components.energy.TransformEnergy(energyMap); err != nil {
+		return err
+	}
+
+	return b.stateManager.UpdateState()
+}
