@@ -174,7 +174,7 @@ func (es *EnergySystem) GetEnergyState() map[string]float64 {
 		"kinetic":   es.kinetic,
 		"thermal":   es.thermal,
 		"field":     es.field,
-		"total":     es.getTotalEnergy(),
+		"total":     es.GetTotalEnergy(),
 		"entropy":   es.entropy,
 		"balance":   es.balance,
 		"capacity":  es.capacity,
@@ -186,6 +186,13 @@ func (es *EnergySystem) GetEnergy(typ EnergyType) float64 {
 	es.mu.RLock()
 	defer es.mu.RUnlock()
 	return es.getEnergy(typ)
+}
+
+// GetBalance 获取能量平衡度
+func (es *EnergySystem) GetBalance() float64 {
+	es.mu.RLock()
+	defer es.mu.RUnlock()
+	return es.balance
 }
 
 // getEnergy 内部获取能量方法（无锁）
@@ -233,13 +240,13 @@ func (es *EnergySystem) decreaseEnergy(typ EnergyType, amount float64) {
 }
 
 // getTotalEnergy 获取总能量（无锁）
-func (es *EnergySystem) getTotalEnergy() float64 {
+func (es *EnergySystem) GetTotalEnergy() float64 {
 	return es.potential + es.kinetic + es.thermal + es.field
 }
 
 // calculateBalance 计算能量平衡度（无锁）
 func (es *EnergySystem) calculateBalance() {
-	totalEnergy := es.getTotalEnergy()
+	totalEnergy := es.GetTotalEnergy()
 	if totalEnergy == 0 {
 		es.balance = DefaultBalance
 		return
