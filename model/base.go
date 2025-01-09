@@ -17,12 +17,13 @@ type BaseFlowModel struct {
 	modelType ModelType
 	capacity  float64
 
-	// 基础状态
-	state   ModelState
-	running bool
-
 	// 状态管理
 	stateManager *StateManager
+	state        ModelState
+
+	// 运行状态
+	running bool
+	done    chan struct{}
 
 	// 内部组件 - 对外隐藏核心实现
 	components struct {
@@ -30,9 +31,6 @@ type BaseFlowModel struct {
 		field   *core.Field
 		energy  *core.EnergySystem
 	}
-
-	// 控制
-	done chan struct{}
 }
 
 // NewBaseFlowModel 创建基础流模型
@@ -80,6 +78,7 @@ func (b *BaseFlowModel) Start() error {
 	}
 
 	b.running = true
+	b.done = make(chan struct{})
 	return nil
 }
 
@@ -98,6 +97,43 @@ func (b *BaseFlowModel) Stop() error {
 	}
 
 	b.running = false
+	close(b.done)
+	return nil
+}
+
+// Reset 重置模型
+func (b *BaseFlowModel) Reset() error {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+
+	// 停止运行
+	if b.running {
+		if err := b.Stop(); err != nil {
+			return err
+		}
+	}
+
+	// 重置状态
+	b.state = ModelState{
+		Type:       b.modelType,
+		Energy:     0,
+		Phase:      PhaseNone,
+		Properties: make(map[string]interface{}),
+		UpdateTime: time.Now(),
+	}
+
+	// 重置内部组件
+	b.components.quantum.Reset()
+	b.components.field.Reset()
+
+	initialState := map[core.EnergyType]float64{
+		core.PotentialEnergy: 0,
+		core.KineticEnergy:   0,
+		core.ThermalEnergy:   0,
+		core.FieldEnergy:     0,
+	}
+	b.components.energy.TransformEnergy(initialState)
+
 	return nil
 }
 
@@ -140,6 +176,33 @@ func (b *BaseFlowModel) GetSystemState() SystemState {
 	b.mu.RLock()
 	defer b.mu.RUnlock()
 	return b.stateManager.GetSystemState()
+}
+
+// SetEnergy 设置能量
+func (b *BaseFlowModel) SetEnergy(energy float64) error {
+	if !ValidateEnergy(energy) {
+		return NewModelError(ErrCodeOperation, "invalid energy value", nil)
+	}
+
+	b.mu.Lock()
+	defer b.mu.Unlock()
+
+	// 更新能量系统
+	energyMap := map[core.EnergyType]float64{
+		core.PotentialEnergy: energy / 4,
+		core.KineticEnergy:   energy / 4,
+		core.ThermalEnergy:   energy / 4,
+		core.FieldEnergy:     energy / 4,
+	}
+	if err := b.components.energy.TransformEnergy(energyMap); err != nil {
+		return err
+	}
+
+	// 更新状态
+	b.state.Energy = energy
+	b.state.UpdateTime = time.Now()
+
+	return b.stateManager.UpdateState()
 }
 
 // initializeState 初始化状态
