@@ -228,7 +228,7 @@ func (f *Field) CalculateInterference(other *Field, position Vector3D) float64 {
 }
 
 // Initialize 初始化场
-func (f *Field) Initialize() {
+func (f *Field) Initialize() error {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 
@@ -241,6 +241,11 @@ func (f *Field) Initialize() {
 		}
 	}
 
+	// 验证参数
+	if err := f.validateParameters(); err != nil {
+		return NewCoreErrorWithCode(ErrInitialize, "failed to initialize field parameters")
+	}
+
 	// 重置动态特性
 	f.WaveNumber = 1.0
 	f.Frequency = 1.0
@@ -251,12 +256,35 @@ func (f *Field) Initialize() {
 	// 清除阴阳分离
 	f.YinField = nil
 	f.YangField = nil
+
+	return nil
+}
+
+// validateParameters 验证场参数
+func (f *Field) validateParameters() error {
+	if f.GridSize <= 0 {
+		return NewCoreErrorWithCode(ErrInvalid, "invalid grid size")
+	}
+	if f.Dimension <= 0 {
+		return NewCoreErrorWithCode(ErrInvalid, "invalid dimension")
+	}
+	if f.WaveNumber < 0 {
+		return NewCoreErrorWithCode(ErrInvalid, "invalid wave number")
+	}
+	if f.Frequency < 0 {
+		return NewCoreErrorWithCode(ErrInvalid, "invalid frequency")
+	}
+	return nil
 }
 
 // SetStrength 设置场强度
-func (f *Field) SetStrength(strength float64) {
+func (f *Field) SetStrength(strength float64) error {
 	f.mu.Lock()
 	defer f.mu.Unlock()
+
+	if strength < MinFieldStrength || strength > MaxFieldStrength {
+		return NewCoreErrorWithCode(ErrRange, "field strength out of range")
+	}
 
 	// 设置整体场强度
 	for i := 0; i < f.GridSize; i++ {
@@ -264,17 +292,27 @@ func (f *Field) SetStrength(strength float64) {
 			f.Strength[i][j] = strength
 		}
 	}
+
+	return nil
 }
 
 // SetPhase 设置场相位
-func (f *Field) SetPhase(phase float64) {
+func (f *Field) SetPhase(phase float64) error {
 	f.mu.Lock()
 	defer f.mu.Unlock()
+
+	// 标准化相位到 [0, 2π)
+	phase = math.Mod(phase, 2*math.Pi)
+	if phase < 0 {
+		phase += 2 * math.Pi
+	}
+
 	f.Phase = phase
+	return nil
 }
 
 // Evolve 场演化
-func (f *Field) Evolve() {
+func (f *Field) Evolve() error {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 
@@ -282,9 +320,16 @@ func (f *Field) Evolve() {
 	f.Phase += math.Pi / 4
 	f.Phase = math.Mod(f.Phase, 2*math.Pi)
 
+	// 验证演化参数
+	if f.WaveNumber < MinWaveLength || f.Frequency <= 0 {
+		return NewCoreErrorWithCode(ErrField, "invalid field evolution parameters")
+	}
+
 	// 更新其他场属性
 	f.WaveNumber *= 0.99 // 波数衰减
 	f.Frequency *= 0.99  // 频率衰减
+
+	return nil
 }
 
 // GetStrength 获取平均场强度
