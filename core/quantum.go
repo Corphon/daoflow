@@ -276,3 +276,38 @@ func (qs *QuantumState) GetCoherence() float64 {
 	coherence := (phaseContribution + 1) * probabilityContribution / 2
 	return math.Max(0, math.Min(1, coherence))
 }
+
+// AddEnergy 增加量子态的能量
+func (qs *QuantumState) AddEnergy(deltaE float64) error {
+	qs.mu.Lock()
+	defer qs.mu.Unlock()
+
+	if deltaE < 0 {
+		return fmt.Errorf("energy increment cannot be negative: %v", deltaE)
+	}
+
+	// 计算新能量
+	newEnergy := qs.energy + deltaE
+
+	// 根据能量变化调整概率幅度
+	// 使用指数衰减函数确保概率保持在 [0,1] 范围内
+	probabilityDelta := (1 - qs.probability) * (1 - math.Exp(-deltaE/qs.energy))
+	newProbability := qs.probability + probabilityDelta
+
+	// 确保概率在有效范围内
+	if newProbability > MaxProbability {
+		newProbability = MaxProbability
+	}
+	if newProbability < MinProbability {
+		newProbability = MinProbability
+	}
+
+	// 更新状态
+	qs.energy = newEnergy
+	qs.probability = newProbability
+
+	// 更新熵
+	qs.updateEntropy()
+
+	return nil
+}
