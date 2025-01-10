@@ -311,3 +311,28 @@ func (qs *QuantumState) AddEnergy(deltaE float64) error {
 
 	return nil
 }
+
+// Update 更新量子态
+func (qs *QuantumState) Update() error {
+	qs.mu.Lock()
+	defer qs.mu.Unlock()
+
+	// 根据当前的能量和相位更新概率
+	coherence := qs.GetCoherence()
+	energyFactor := math.Exp(-qs.energy / DefaultEnergy)
+
+	// 更新概率，考虑能量和相干性的影响
+	newProbability := qs.probability*coherence*(1-energyFactor) +
+		MinProbability*energyFactor
+
+	// 确保概率在有效范围内
+	qs.probability = math.Max(MinProbability, math.Min(MaxProbability, newProbability))
+
+	// 更新相位
+	qs.phase = math.Mod(qs.phase+math.Pi/4*coherence, TwoPi)
+
+	// 更新熵
+	qs.updateEntropy()
+
+	return nil
+}
