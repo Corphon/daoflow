@@ -197,16 +197,48 @@ type SystemStatus struct {
 	Resources  ResourceStat      `json:"resources"`
 }
 
-// SystemState 系统状态类型
-type SystemState uint8
+// SystemState 系统状态
+type SystemState struct {
+	Evolution struct {
+		Level              float64   // 当前演化等级
+		EnergyDistribution []float64 // 能量分布
+		Direction          Vector3D  // 演化方向
+		Speed              float64   // 演化速度
+		Phase              float64   // 演化相位
+	}
 
-const (
-	StateInitializing SystemState = iota
-	StateRunning
-	StatePaused
-	StateError
-	StateShutdown
-)
+	Adaptation struct {
+		Fitness      float64   // 适应度
+		LearningRate float64   // 学习率
+		Memory       []float64 // 记忆状态
+		Response     []float64 // 响应历史
+		Plasticity   float64   // 可塑性
+	}
+
+	Synchronization struct {
+		Phase     float64 // 同步相位
+		Coupling  float64 // 耦合强度
+		Coherence float64 // 相干度
+		Stability float64 // 稳定性
+	}
+
+	Optimization struct {
+		Objective  float64 // 目标值
+		Progress   float64 // 优化进度
+		Efficiency float64 // 优化效率
+		Quality    float64 // 解的质量
+	}
+
+	Emergence struct {
+		Complexity  float64 // 系统复杂度
+		Novelty     float64 // 新颖度
+		Integration float64 // 集成度
+		Potential   float64 // 涌现潜力
+	}
+
+	Energy float64   // 系统总能量
+	Time   time.Time // 状态时间戳
+}
 
 // Component 组件信息
 type Component struct {
