@@ -7,6 +7,7 @@ import (
     "sync"
     "time"
 
+    "github.com/Corphon/daoflow/model"
     "github.com/Corphon/daoflow/system/types"
 )
 
@@ -25,8 +26,8 @@ type AlertHandler struct {
     // 处理器注册表
     handlers map[string]HandlerFunc
 
-    // 告警队列
-    queue chan types.Alert
+    // 告警队列 - 使用 types.AlertData
+    queue chan types.AlertData
 
     // 处理状态
     status struct {
@@ -39,28 +40,32 @@ type AlertHandler struct {
 
     // 处理结果
     results chan HandlerResult
+
+    // 模型状态
+    modelState model.ModelState
 }
 
 // HandlerFunc 告警处理函数类型
-type HandlerFunc func(context.Context, types.Alert) error
+type HandlerFunc func(context.Context, types.AlertData) error
 
 // HandlerResult 处理结果
 type HandlerResult struct {
-    AlertID    string
-    Handler    string
-    Status     string
-    Error      error
-    StartTime  time.Time
-    EndTime    time.Time
-    Duration   time.Duration
-    RetryCount int
+    AlertData   types.AlertData
+    ModelState  model.ModelState
+    Handler     string
+    Status      string
+    Error       error
+    StartTime   time.Time
+    EndTime     time.Time
+    Duration    time.Duration
+    RetryCount  int
 }
 
 // NewAlertHandler 创建新的告警处理器
 func NewAlertHandler(config types.AlertConfig) *AlertHandler {
     h := &AlertHandler{
         handlers: make(map[string]HandlerFunc),
-        queue:    make(chan types.Alert, config.QueueSize),
+        queue:    make(chan types.AlertData, config.QueueSize),
         results:  make(chan HandlerResult, config.QueueSize),
     }
 
@@ -81,7 +86,7 @@ func (h *AlertHandler) Start(ctx context.Context) error {
     h.mu.Lock()
     if h.status.isRunning {
         h.mu.Unlock()
-        return types.NewSystemError(types.ErrRuntime, "handler already running", nil)
+        return model.WrapError(nil, model.ErrCodeOperation, "handler already running")
     }
     h.status.isRunning = true
     h.mu.Unlock()
@@ -99,29 +104,25 @@ func (h *AlertHandler) Stop() error {
     h.mu.Lock()
     defer h.mu.Unlock()
 
+    if !h.status.isRunning {
+        return model.WrapError(nil, model.ErrCodeOperation, "handler not running")
+    }
+
     h.status.isRunning = false
     return nil
 }
 
-// RegisterHandler 注册告警处理器
-func (h *AlertHandler) RegisterHandler(name string, handler HandlerFunc) {
-    h.mu.Lock()
-    defer h.mu.Unlock()
-
-    h.handlers[name] = handler
-}
-
 // Handle 处理告警
-func (h *AlertHandler) Handle(alert types.Alert) error {
+func (h *AlertHandler) Handle(alert types.AlertData) error {
     if !h.status.isRunning {
-        return types.NewSystemError(types.ErrRuntime, "handler not running", nil)
+        return model.WrapError(nil, model.ErrCodeOperation, "handler not running")
     }
 
     select {
     case h.queue <- alert:
         return nil
     default:
-        return types.NewSystemError(types.ErrOverflow, "alert queue full", nil)
+        return model.WrapError(nil, model.ErrCodeResource, "alert queue full")
     }
 }
 
@@ -138,7 +139,7 @@ func (h *AlertHandler) processLoop(ctx context.Context) {
 }
 
 // handleAlert 处理单个告警
-func (h *AlertHandler) handleAlert(ctx context.Context, alert types.Alert) {
+func (h *AlertHandler) handleAlert(ctx context.Context, alert types.AlertData) {
     h.mu.Lock()
     h.status.activeCount++
     h.mu.Unlock()
@@ -157,9 +158,10 @@ func (h *AlertHandler) handleAlert(ctx context.Context, alert types.Alert) {
     // 执行所有注册的处理器
     for name, handler := range h.handlers {
         result := HandlerResult{
-            AlertID:   alert.ID,
-            Handler:   name,
-            StartTime: time.Now(),
+            AlertData:  alert,
+            ModelState: h.modelState,
+            Handler:    name,
+            StartTime:  time.Now(),
         }
 
         // 重试机制
@@ -191,8 +193,8 @@ func (h *AlertHandler) handleAlert(ctx context.Context, alert types.Alert) {
         result.Duration = result.EndTime.Sub(result.StartTime)
         if err != nil {
             result.Status = "failed"
-            result.Error = err
-            h.recordError(err)
+            result.Error = model.WrapError(err, model.ErrCodeOperation, "handler execution failed")
+            h.recordError(result.Error)
         } else {
             result.Status = "success"
         }
@@ -204,28 +206,35 @@ func (h *AlertHandler) handleAlert(ctx context.Context, alert types.Alert) {
 // registerDefaultHandlers 注册默认处理器
 func (h *AlertHandler) registerDefaultHandlers() {
     // 日志处理器
-    h.RegisterHandler("log", func(ctx context.Context, alert types.Alert) error {
+    h.RegisterHandler("log", func(ctx context.Context, alert types.AlertData) error {
         // TODO: 实现日志记录逻辑
         return nil
     })
 
     // 状态更新处理器
-    h.RegisterHandler("status", func(ctx context.Context, alert types.Alert) error {
+    h.RegisterHandler("status", func(ctx context.Context, alert types.AlertData) error {
         // TODO: 实现状态更新逻辑
         return nil
     })
 
-    // 自动恢复处理器
-    h.RegisterHandler("recovery", func(ctx context.Context, alert types.Alert) error {
-        // TODO: 实现自动恢复逻辑
-        return nil
-    })
-
     // 元系统响应处理器
-    h.RegisterHandler("meta", func(ctx context.Context, alert types.Alert) error {
-        // TODO: 实现元系统响应逻辑
+    h.RegisterHandler("meta", func(ctx context.Context, alert types.AlertData) error {
+        // 更新模型状态
+        if err := h.updateModelState(alert); err != nil {
+            return model.WrapError(err, model.ErrCodeOperation, "failed to update model state")
+        }
         return nil
     })
+}
+
+// updateModelState 更新模型状态
+func (h *AlertHandler) updateModelState(alert types.AlertData) error {
+    h.mu.Lock()
+    defer h.mu.Unlock()
+
+    // 基于告警更新模型状态
+    // TODO: 实现具体的状态更新逻辑
+    return nil
 }
 
 // recordResult 记录处理结果
@@ -233,7 +242,7 @@ func (h *AlertHandler) recordResult(result HandlerResult) {
     select {
     case h.results <- result:
     default:
-        h.recordError(types.NewSystemError(types.ErrOverflow, "result buffer full", nil))
+        h.recordError(model.WrapError(nil, model.ErrCodeResource, "result buffer full"))
     }
 }
 
@@ -247,23 +256,11 @@ func (h *AlertHandler) recordError(err error) {
 }
 
 // GetStatus 获取处理器状态
-func (h *AlertHandler) GetStatus() struct {
-    IsRunning    bool
-    ActiveCount  int
-    TotalHandled int64
-    LastError    error
-    ErrorCount   int
-} {
+func (h *AlertHandler) GetStatus() types.HandlerStatus {
     h.mu.RLock()
     defer h.mu.RUnlock()
 
-    return struct {
-        IsRunning    bool
-        ActiveCount  int
-        TotalHandled int64
-        LastError    error
-        ErrorCount   int
-    }{
+    return types.HandlerStatus{
         IsRunning:    h.status.isRunning,
         ActiveCount:  h.status.activeCount,
         TotalHandled: h.status.totalHandled,
