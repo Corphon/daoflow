@@ -6,8 +6,9 @@ import (
     "fmt"
     "sync"
     "time"
+    "runtime"
+    "sync/atomic"
 
-    // 内部包导入
     "github.com/Corphon/daoflow/system/meta/field"
     "github.com/Corphon/daoflow/system/meta/emergence"
     "github.com/Corphon/daoflow/system/meta/resonance"
@@ -326,5 +327,283 @@ func (s *System) stopSubSystems() error {
     if err := s.stopMetaSystems(); err != nil {
         return err
     }
+    return nil
+}
+
+// 计算系统指标的辅助方法
+func (s *System) calculateMemoryUsage() uint64 {
+    var m runtime.MemStats
+    runtime.ReadMemStats(&m)
+    
+    // 返回当前程序使用的内存量(字节)
+    // Alloc 表示已分配的内存
+    // Sys 表示从系统获取的内存
+    return m.Alloc
+}
+
+func (s *System) calculateCPUUsage() float64 {
+    // 使用简单的CPU使用率计算方法
+    startTime := time.Now()
+    startCPU := getCPUTime()
+    
+    // 等待一小段时间来计算CPU使用率
+    time.Sleep(100 * time.Millisecond)
+    
+    endTime := time.Now()
+    endCPU := getCPUTime()
+    
+    // 计算CPU使用率
+    cpuTime := endCPU - startCPU
+    realTime := endTime.Sub(startTime).Seconds()
+    
+    if realTime > 0 {
+        return cpuTime / realTime * 100.0
+    }
+    return 0.0
+}
+
+// getCPUTime 获取CPU时间
+func getCPUTime() float64 {
+    // 使用runtime.ReadMemStats来间接评估CPU时间
+    var m runtime.MemStats
+    runtime.ReadMemStats(&m)
+    
+    // 使用GC时间和系统CPU时间的组合来估算
+    return float64(m.GCSys) / 1e9
+}
+
+func (s *System) getGoroutineCount() int {
+    return runtime.NumGoroutine()
+}
+
+// 错误计数器
+var errorCounter int64 = 0
+
+func (s *System) getErrorCount() int64 {
+    return atomic.LoadInt64(&errorCounter)
+}
+
+func (s *System) incrementErrorCount() {
+    atomic.AddInt64(&errorCounter, 1)
+}
+
+// 事件计数器
+var eventCounter int64 = 0
+
+func (s *System) getEventCount() int64 {
+    return atomic.LoadInt64(&eventCounter)
+}
+
+func (s *System) incrementEventCount() {
+    atomic.AddInt64(&eventCounter, 1)
+}
+
+// 启动各个子系统组的方法
+func (s *System) startMetaSystems() error {
+    if s.meta.fieldSystem != nil {
+        if err := s.meta.fieldSystem.Start(); err != nil {
+            s.incrementErrorCount()
+            return fmt.Errorf("failed to start field system: %v", err)
+        }
+    }
+
+    if s.meta.emergenceSystem != nil {
+        if err := s.meta.emergenceSystem.Start(); err != nil {
+            s.incrementErrorCount()
+            return fmt.Errorf("failed to start emergence system: %v", err)
+        }
+    }
+
+    if s.meta.resonanceSystem != nil {
+        if err := s.meta.resonanceSystem.Start(); err != nil {
+            s.incrementErrorCount()
+            return fmt.Errorf("failed to start resonance system: %v", err)
+        }
+    }
+
+    s.incrementEventCount()
+    return nil
+}
+
+func (s *System) startEvolutionSystems() error {
+    if s.evolution.patternSystem != nil {
+        if err := s.evolution.patternSystem.Start(); err != nil {
+            s.incrementErrorCount()
+            return fmt.Errorf("failed to start pattern system: %v", err)
+        }
+    }
+
+    if s.evolution.mutationSystem != nil {
+        if err := s.evolution.mutationSystem.Start(); err != nil {
+            s.incrementErrorCount()
+            return fmt.Errorf("failed to start mutation system: %v", err)
+        }
+    }
+
+    if s.evolution.adaptationSystem != nil {
+        if err := s.evolution.adaptationSystem.Start(); err != nil {
+            s.incrementErrorCount()
+            return fmt.Errorf("failed to start adaptation system: %v", err)
+        }
+    }
+
+    s.incrementEventCount()
+    return nil
+}
+
+func (s *System) startControlSystems() error {
+    if s.control.stateManager != nil {
+        if err := s.control.stateManager.Start(); err != nil {
+            s.incrementErrorCount()
+            return fmt.Errorf("failed to start state manager: %v", err)
+        }
+    }
+
+    if s.control.flowController != nil {
+        if err := s.control.flowController.Start(); err != nil {
+            s.incrementErrorCount()
+            return fmt.Errorf("failed to start flow controller: %v", err)
+        }
+    }
+
+    if s.control.syncController != nil {
+        if err := s.control.syncController.Start(); err != nil {
+            s.incrementErrorCount()
+            return fmt.Errorf("failed to start sync controller: %v", err)
+        }
+    }
+
+    s.incrementEventCount()
+    return nil
+}
+
+func (s *System) startMonitorSystems() error {
+    if s.monitor.metricsSystem != nil {
+        if err := s.monitor.metricsSystem.Start(); err != nil {
+            s.incrementErrorCount()
+            return fmt.Errorf("failed to start metrics system: %v", err)
+        }
+    }
+
+    if s.monitor.traceSystem != nil {
+        if err := s.monitor.traceSystem.Start(); err != nil {
+            s.incrementErrorCount()
+            return fmt.Errorf("failed to start trace system: %v", err)
+        }
+    }
+
+    if s.monitor.alertSystem != nil {
+        if err := s.monitor.alertSystem.Start(); err != nil {
+            s.incrementErrorCount()
+            return fmt.Errorf("failed to start alert system: %v", err)
+        }
+    }
+
+    s.incrementEventCount()
+    return nil
+}
+
+// 停止各个子系统组的方法
+func (s *System) stopMetaSystems() error {
+    if s.meta.resonanceSystem != nil {
+        if err := s.meta.resonanceSystem.Stop(); err != nil {
+            s.incrementErrorCount()
+            return fmt.Errorf("failed to stop resonance system: %v", err)
+        }
+    }
+
+    if s.meta.emergenceSystem != nil {
+        if err := s.meta.emergenceSystem.Stop(); err != nil {
+            s.incrementErrorCount()
+            return fmt.Errorf("failed to stop emergence system: %v", err)
+        }
+    }
+
+    if s.meta.fieldSystem != nil {
+        if err := s.meta.fieldSystem.Stop(); err != nil {
+            s.incrementErrorCount()
+            return fmt.Errorf("failed to stop field system: %v", err)
+        }
+    }
+
+    s.incrementEventCount()
+    return nil
+}
+
+func (s *System) stopEvolutionSystems() error {
+    if s.evolution.adaptationSystem != nil {
+        if err := s.evolution.adaptationSystem.Stop(); err != nil {
+            s.incrementErrorCount()
+            return fmt.Errorf("failed to stop adaptation system: %v", err)
+        }
+    }
+
+    if s.evolution.mutationSystem != nil {
+        if err := s.evolution.mutationSystem.Stop(); err != nil {
+            s.incrementErrorCount()
+            return fmt.Errorf("failed to stop mutation system: %v", err)
+        }
+    }
+
+    if s.evolution.patternSystem != nil {
+        if err := s.evolution.patternSystem.Stop(); err != nil {
+            s.incrementErrorCount()
+            return fmt.Errorf("failed to stop pattern system: %v", err)
+        }
+    }
+
+    s.incrementEventCount()
+    return nil
+}
+
+func (s *System) stopControlSystems() error {
+    if s.control.syncController != nil {
+        if err := s.control.syncController.Stop(); err != nil {
+            s.incrementErrorCount()
+            return fmt.Errorf("failed to stop sync controller: %v", err)
+        }
+    }
+
+    if s.control.flowController != nil {
+        if err := s.control.flowController.Stop(); err != nil {
+            s.incrementErrorCount()
+            return fmt.Errorf("failed to stop flow controller: %v", err)
+        }
+    }
+
+    if s.control.stateManager != nil {
+        if err := s.control.stateManager.Stop(); err != nil {
+            s.incrementErrorCount()
+            return fmt.Errorf("failed to stop state manager: %v", err)
+        }
+    }
+
+    s.incrementEventCount()
+    return nil
+}
+
+func (s *System) stopMonitorSystems() error {
+    if s.monitor.alertSystem != nil {
+        if err := s.monitor.alertSystem.Stop(); err != nil {
+            s.incrementErrorCount()
+            return fmt.Errorf("failed to stop alert system: %v", err)
+        }
+    }
+
+    if s.monitor.traceSystem != nil {
+        if err := s.monitor.traceSystem.Stop(); err != nil {
+            s.incrementErrorCount()
+            return fmt.Errorf("failed to stop trace system: %v", err)
+        }
+    }
+
+    if s.monitor.metricsSystem != nil {
+        if err := s.monitor.metricsSystem.Stop(); err != nil {
+            s.incrementErrorCount()
+            return fmt.Errorf("failed to stop metrics system: %v", err)
+        }
+    }
+
+    s.incrementEventCount()
     return nil
 }
