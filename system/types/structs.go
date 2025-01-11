@@ -13,276 +13,247 @@ import (
 type System struct {
     mu sync.RWMutex
     
-    // 系统基础信息
-    ID        string
-    Name      string
-    Version   string
-    StartTime time.Time
+    // 基础信息
+    ID        string    `json:"id"`
+    Name      string    `json:"name"`
+    Version   string    `json:"version"`
+    StartTime time.Time `json:"start_time"`
     
     // 系统状态
     state struct {
-        Current   SystemState
-        Previous  SystemState
-        LastChange time.Time
+        Current    SystemState    `json:"current"`
+        Previous   SystemState    `json:"previous"`
+        LastChange time.Time      `json:"last_change"`
+        History    []StateTransition `json:"history"`
     }
     
     // 元系统组件
     meta struct {
         Field struct {
-            State     FieldState
-            Strength  float64
-            Vector    []float64
-            Tensor    [][]float64
-        }
-        
-        Quantum struct {
-            Wave      []complex128
-            Phase     float64
-            Entangled bool
-            Coherence float64
+            State     FieldState  `json:"state"`
+            Quantum   QuantumState `json:"quantum"`
+            Coupling  [][]float64  `json:"coupling"`
         }
         
         Emergence struct {
-            Patterns  []EmergentPattern
-            Active    []EmergentProperty
-            Potential []PotentialEmergence
+            Patterns  []EmergentPattern   `json:"patterns"`
+            Active    []EmergentProperty  `json:"active"`
+            Potential []PotentialEmergence `json:"potential"`
+        }
+        
+        Resonance struct {
+            State     ResonanceState `json:"state"`
+            Coherence float64       `json:"coherence"`
+            Phase     float64       `json:"phase"`
         }
     }
     
-    // 演化系统组件
+    // 演化组件
     evolution struct {
-        Level     float64
-        Direction Vector3D
-        Speed     float64
-        Path      []EvolutionPoint
-        History   []StateTransition
+        Current struct {
+            Level     float64     `json:"level"`
+            Direction Vector3D    `json:"direction"`
+            Speed     float64     `json:"speed"`
+            Energy    float64     `json:"energy"`
+        }
+        
+        History struct {
+            Path      []EvolutionPoint   `json:"path"`
+            Changes   []StateTransition  `json:"changes"`
+            Metrics   []EvolutionMetrics `json:"metrics"`
+        }
     }
     
     // 资源管理
-    resources struct {
-        Pool      ResourcePool
-        Queue     []ResourceReq
-        Active    []ResourceAllocation
-        History   []ResourceEvent
+    resources ResourceManager
+    
+    // 监控组件
+    monitor struct {
+        Metrics    MetricsCollector `json:"metrics"`
+        Alerts     []Alert          `json:"alerts"`
+        Status     HealthStatus     `json:"status"`
     }
     
-    // 系统配置
+    // 配置
     config SystemConfig
 }
 
 // FieldState 场状态
 type FieldState struct {
-    // 基本场属性
-    Strength   float64            // 场强度
-    Phase      float64            // 场相位
-    Polarity   float64            // 场极性
-    Dimension  int               // 场维度
+    // 基本属性
+    Strength   float64            `json:"strength"`
+    Phase      float64            `json:"phase"`
+    Polarity   float64            `json:"polarity"`
+    Dimension  int               `json:"dimension"`
     
     // 场向量和张量
-    Vector     []float64         // 场向量
-    Tensor     [][]float64       // 场张量
-    Gradient   []float64         // 场梯度
+    Vector     []float64          `json:"vector"`
+    Tensor     [][]float64        `json:"tensor"`
+    Gradient   []float64          `json:"gradient"`
     
-    // 场特性
-    Properties map[string]float64 // 场属性
-    Coupling   [][]float64       // 耦合矩阵
-    Symmetry   string            // 对称性
+    // 特性
+    Properties map[string]float64  `json:"properties"`
+    Symmetry   string             `json:"symmetry"`
 }
 
 // QuantumState 量子态
 type QuantumState struct {
-    // 波函数
-    Wave        []complex128     // 波函数
-    Phase       float64         // 相位
-    Amplitude   float64         // 振幅
+    Wave       []complex128  `json:"wave"`
+    Phase      float64      `json:"phase"`
+    Amplitude  float64      `json:"amplitude"`
+    Entangled  bool         `json:"entangled"`
+    Coherence  float64      `json:"coherence"`
+    Superposed bool         `json:"superposed"`
     
-    // 量子特性
-    Entangled   bool           // 纠缠状态
-    Coherence   float64        // 相干度
-    Superposed  bool           // 叠加态
-    
-    // 测量结果
     Measurement struct {
-        Value      float64
-        Certainty  float64
-        Timestamp  time.Time
-    }
+        Value     float64   `json:"value"`
+        Certainty float64   `json:"certainty"`
+        Time      time.Time `json:"time"`
+    } `json:"measurement"`
+}
+
+// ResonanceState 共振状态
+type ResonanceState struct {
+    Active    bool      `json:"active"`
+    Frequency float64   `json:"frequency"`
+    Amplitude float64   `json:"amplitude"`
+    Phase     float64   `json:"phase"`
+    Coupling  float64   `json:"coupling"`
 }
 
 // EmergentPattern 涌现模式
 type EmergentPattern struct {
-    ID          string
-    Type        string
-    Properties  map[string]float64
-    Components  []string
-    Strength    float64
-    Stability   float64
-    Formation   time.Time
+    ID         string              `json:"id"`
+    Type       string              `json:"type"`
+    Properties map[string]float64  `json:"properties"`
+    Components []string            `json:"components"`
+    Strength   float64            `json:"strength"`
+    Stability  float64            `json:"stability"`
+    Formation  time.Time          `json:"formation"`
+}
+
+// EmergentProperty 涌现属性
+type EmergentProperty struct {
+    ID         string             `json:"id"`
+    Pattern    EmergentPattern    `json:"pattern"`
+    State      map[string]float64 `json:"state"`
+    Energy     float64           `json:"energy"`
+    Time       time.Time         `json:"time"`
+}
+
+// PotentialEmergence 潜在涌现
+type PotentialEmergence struct {
+    Pattern     EmergentPattern `json:"pattern"`
+    Probability float64        `json:"probability"`
+    TimeFrame   time.Duration  `json:"time_frame"`
+    Impact      float64        `json:"impact"`
 }
 
 // Vector3D 三维向量
 type Vector3D struct {
-    X float64
-    Y float64
-    Z float64
+    X float64 `json:"x"`
+    Y float64 `json:"y"`
+    Z float64 `json:"z"`
 }
 
 // EvolutionPoint 演化点
 type EvolutionPoint struct {
-    State     SystemState
-    Energy    float64
-    Time      time.Time
-    Position  Vector3D
+    State     SystemState `json:"state"`
+    Energy    float64    `json:"energy"`
+    Time      time.Time  `json:"time"`
+    Position  Vector3D   `json:"position"`
+}
+
+// EvolutionMetrics 演化指标
+type EvolutionMetrics struct {
+    Level     float64   `json:"level"`
+    Speed     float64   `json:"speed"`
+    Direction Vector3D  `json:"direction"`
+    Energy    float64   `json:"energy"`
+    Time      time.Time `json:"time"`
+}
+
+// ResourceManager 资源管理器
+type ResourceManager struct {
+    Pool      ResourcePool         `json:"pool"`
+    Queue     []ResourceReq        `json:"queue"`
+    Active    []ResourceAllocation `json:"active"`
+    History   []ResourceEvent      `json:"history"`
+    Stats     ResourceStats        `json:"stats"`
 }
 
 // ResourcePool 资源池
 type ResourcePool struct {
-    // 计算资源
     CPU struct {
-        Total     float64
-        Used      float64
-        Reserved  float64
-    }
+        Total     float64 `json:"total"`
+        Used      float64 `json:"used"`
+        Reserved  float64 `json:"reserved"`
+    } `json:"cpu"`
     
-    // 内存资源
     Memory struct {
-        Total     float64
-        Used      float64
-        Cached    float64
-    }
+        Total     float64 `json:"total"`
+        Used      float64 `json:"used"`
+        Cached    float64 `json:"cached"`
+    } `json:"memory"`
     
-    // 能量资源
     Energy struct {
-        Current   float64
-        Max       float64
-        Min       float64
-        Flow      float64
-    }
+        Current   float64 `json:"current"`
+        Max       float64 `json:"max"`
+        Min       float64 `json:"min"`
+        Flow      float64 `json:"flow"`
+    } `json:"energy"`
 }
 
-// ResourceEvent 资源事件
-type ResourceEvent struct {
-    Type      string
-    Resource  string
-    Amount    float64
-    Time      time.Time
-    Status    string
+// ResourceStats 资源统计
+type ResourceStats struct {
+    Utilization  float64   `json:"utilization"`
+    Efficiency   float64   `json:"efficiency"`
+    Balance      float64   `json:"balance"`
+    LastUpdate   time.Time `json:"last_update"`
 }
 
-// SystemConfig 系统配置
-type SystemConfig struct {
-    // 基础配置
-    Base struct {
-        Name         string
-        Description  string
-        Version     string
-        LogLevel    string
-    }
-    
-    // 性能配置
-    Performance struct {
-        MaxGoroutines  int
-        BufferSize     int
-        Timeout        time.Duration
-    }
-    
-    // 资源限制
-    Limits struct {
-        MaxCPU     float64
-        MaxMemory  float64
-        MaxEnergy  float64
-    }
-    
-    // 演化参数
-    Evolution struct {
-        InitialLevel    float64
-        MinSpeed        float64
-        MaxSpeed        float64
-        AdaptRate      float64
-    }
-    
-    // 场配置
-    Field struct {
-        InitStrength   float64
-        MinStrength    float64
-        MaxStrength    float64
-        Dimension     int
-    }
-    
-    // 量子配置
-    Quantum struct {
-        WaveSize      int
-        CoherenceThreshold float64
-        EntanglementLimit  int
-    }
+// Alert 告警信息
+type Alert struct {
+    ID        string        `json:"id"`
+    Type      string        `json:"type"`
+    Level     IssueSeverity `json:"level"`
+    Message   string        `json:"message"`
+    Source    string        `json:"source"`
+    Time      time.Time     `json:"time"`
+    Status    string        `json:"status"`
 }
 
-// StateTransition 状态转换记录
+// MetricsCollector 指标收集器
+type MetricsCollector struct {
+    Current  MetricsData    `json:"current"`
+    History  []MetricsData  `json:"history"`
+    Config   MetricsConfig  `json:"config"`
+}
+
+// MetricsConfig 指标配置
+type MetricsConfig struct {
+    Interval    time.Duration          `json:"interval"`
+    Retention   time.Duration          `json:"retention"`
+    Thresholds  map[string]float64     `json:"thresholds"`
+    Filters     []string               `json:"filters"`
+}
+
+// StateTransition 状态转换
 type StateTransition struct {
-    From      SystemState
-    To        SystemState
-    Reason    string
-    Energy    float64
-    Time      time.Time
+    From      SystemState `json:"from"`
+    To        SystemState `json:"to"`
+    Reason    string     `json:"reason"`
+    Energy    float64    `json:"energy"`
+    Time      time.Time  `json:"time"`
 }
 
-// MetricsData 指标数据
-type MetricsData struct {
-    // 系统指标
-    System struct {
-        State     SystemState
-        Health    float64
-        Load      float64
-        Uptime    time.Duration
-    }
-    
-    // 性能指标
-    Performance struct {
-        CPU       float64
-        Memory    float64
-        Latency   float64
-        QPS       float64
-    }
-    
-    // 资源指标
-    Resources struct {
-        Usage     float64
-        Available float64
-        Efficiency float64
-    }
-    
-    // 演化指标
-    Evolution struct {
-        Progress  float64
-        Speed     float64
-        Quality   float64
-    }
-    
-    // 时间戳
-    Timestamp time.Time
-}
-
-// AnalysisResult 分析结果
-type AnalysisResult struct {
-    // 基本信息
-    ID        string
-    Type      string
-    Time      time.Time
-    
-    // 分析数据
-    Data struct {
-        Values    map[string]float64
-        Patterns  []string
-        Trends    []float64
-    }
-    
-    // 评估结果
-    Evaluation struct {
-        Score     float64
-        Confidence float64
-        Risk      float64
-    }
-    
-    // 建议actions
-    Recommendations []string
+// SystemEvent 系统事件
+type SystemEvent struct {
+    ID        string      `json:"id"`
+    Type      EventType   `json:"type"`
+    Source    string      `json:"source"`
+    Target    string      `json:"target"`
+    Data      interface{} `json:"data"`
+    Time      time.Time   `json:"time"`
+    Status    string      `json:"status"`
 }
