@@ -8,6 +8,7 @@ import (
     "sync"
     "time"
 
+    "github.com/Corphon/daoflow/model"
     "github.com/Corphon/daoflow/system/types"
 )
 
@@ -16,21 +17,17 @@ type Analyzer struct {
     mu sync.RWMutex
 
     // 基础配置
-    config struct {
-        WindowSize      int               // 分析窗口大小
-        UpdateInterval  time.Duration     // 更新间隔
-        Thresholds     map[string]float64 // 分析阈值
-        Patterns       []types.Pattern    // 模式匹配规则
-    }
+    config types.MetricsConfig
 
     // 数据源
     collector *Collector
     
     // 分析结果缓存
     cache struct {
-        lastAnalysis types.AnalysisResult
-        history      []types.AnalysisResult
-        patterns     map[string][]float64
+        lastAnalysis    *AnalysisResult
+        history        []*AnalysisResult
+        patterns       map[string][]float64
+        modelMetrics   *model.ModelMetrics
     }
 
     // 分析状态
@@ -41,16 +38,66 @@ type Analyzer struct {
     }
 }
 
+// AnalysisResult 分析结果
+type AnalysisResult struct {
+    ID        string
+    Timestamp time.Time
+    
+    // 系统指标分析
+    SystemMetrics  types.MetricsData
+    
+    // 模型指标分析
+    ModelMetrics   model.ModelMetrics
+    
+    // 量子分析
+    QuantumAnalysis struct {
+        Entanglement float64
+        Coherence    float64
+        Stability    float64
+        Phase        float64
+    }
+    
+    // 场分析
+    FieldAnalysis struct {
+        Strength    float64
+        Uniformity  float64
+        Coupling    float64
+        Resonance   float64
+    }
+    
+    // 涌现分析
+    EmergenceAnalysis struct {
+        Patterns    []types.EmergentPattern
+        Complexity  float64
+        Stability   float64
+        Potential   float64
+    }
+    
+    // 预测
+    Predictions struct {
+        NextState       model.ModelState
+        EnergyTrend    float64
+        FieldEvolution []float64
+        EmergenceProb  map[string]float64
+    }
+    
+    // 洞察
+    Insights []types.Insight
+}
+
 // NewAnalyzer 创建新的分析器
 func NewAnalyzer(collector *Collector, config types.MetricsConfig) *Analyzer {
     return &Analyzer{
         collector: collector,
+        config:    config,
         cache: struct {
-            lastAnalysis types.AnalysisResult
-            history      []types.AnalysisResult
-            patterns     map[string][]float64
+            lastAnalysis    *AnalysisResult
+            history        []*AnalysisResult
+            patterns       map[string][]float64
+            modelMetrics   *model.ModelMetrics
         }{
-            patterns: make(map[string][]float64),
+            patterns:     make(map[string][]float64),
+            modelMetrics: &model.ModelMetrics{},
         },
     }
 }
@@ -60,7 +107,7 @@ func (a *Analyzer) Start(ctx context.Context) error {
     a.mu.Lock()
     if a.status.isRunning {
         a.mu.Unlock()
-        return types.NewSystemError(types.ErrRuntime, "analyzer already running", nil)
+        return model.WrapError(nil, model.ErrCodeOperation, "analyzer already running")
     }
     a.status.isRunning = true
     a.mu.Unlock()
@@ -74,48 +121,50 @@ func (a *Analyzer) Stop() error {
     a.mu.Lock()
     defer a.mu.Unlock()
 
+    if !a.status.isRunning {
+        return model.WrapError(nil, model.ErrCodeOperation, "analyzer not running")
+    }
+
     a.status.isRunning = false
     return nil
 }
 
-// analysisLoop 分析循环
-func (a *Analyzer) analysisLoop(ctx context.Context) {
-    ticker := time.NewTicker(a.config.UpdateInterval)
-    defer ticker.Stop()
-
-    for {
-        select {
-        case <-ctx.Done():
-            return
-        case <-ticker.C:
-            if err := a.analyze(ctx); err != nil {
-                a.handleError(err)
-            }
-        }
-    }
-}
-
-// analyze 执行指标分析
+// analyze 执行分析
 func (a *Analyzer) analyze(ctx context.Context) error {
     // 获取最新指标数据
     metrics := a.collector.GetCurrentMetrics()
+    modelMetrics := a.collector.GetModelMetrics()
     history := a.collector.GetMetricsHistory()
 
     // 创建分析结果
-    result := types.AnalysisResult{
-        Timestamp: time.Now(),
-        Metrics:   metrics,
+    result := &AnalysisResult{
+        ID:           generateAnalysisID(),
+        Timestamp:    time.Now(),
+        SystemMetrics: metrics,
+        ModelMetrics:  modelMetrics,
     }
 
     // 执行各类分析
-    a.analyzeEvolutionTrends(&result, history)
-    a.analyzeFieldDynamics(&result, history)
-    a.analyzeQuantumStates(&result, history)
-    a.analyzeEmergentPatterns(&result, history)
-    a.predictFutureStates(&result, history)
+    if err := a.analyzeQuantumStates(result); err != nil {
+        return model.WrapError(err, model.ErrCodeOperation, "quantum analysis failed")
+    }
 
-    // 生成洞察和建议
-    a.generateInsights(&result)
+    if err := a.analyzeFieldDynamics(result); err != nil {
+        return model.WrapError(err, model.ErrCodeOperation, "field analysis failed")
+    }
+
+    if err := a.analyzeEmergentPatterns(result); err != nil {
+        return model.WrapError(err, model.ErrCodeOperation, "emergence analysis failed")
+    }
+
+    if err := a.generatePredictions(result); err != nil {
+        return model.WrapError(err, model.ErrCodeOperation, "prediction generation failed")
+    }
+
+    // 生成洞察
+    if err := a.generateInsights(result); err != nil {
+        return model.WrapError(err, model.ErrCodeOperation, "insight generation failed")
+    }
 
     // 缓存结果
     a.cacheResult(result)
@@ -123,200 +172,276 @@ func (a *Analyzer) analyze(ctx context.Context) error {
     return nil
 }
 
-// analyzeEvolutionTrends 分析演化趋势
-func (a *Analyzer) analyzeEvolutionTrends(result *types.AnalysisResult, history []types.MetricsData) {
-    if len(history) < 2 {
-        return
-    }
+// analyzeQuantumStates 分析量子态
+func (a *Analyzer) analyzeQuantumStates(result *AnalysisResult) error {
+    quantum := result.ModelMetrics.Quantum
+    
+    result.QuantumAnalysis.Entanglement = calculateEntanglement(quantum)
+    result.QuantumAnalysis.Coherence = calculateCoherence(quantum)
+    result.QuantumAnalysis.Stability = calculateQuantumStability(quantum)
+    result.QuantumAnalysis.Phase = quantum.Phase
 
-    // 计算演化速度
-    evolutionSpeeds := make([]float64, len(history)-1)
-    for i := 1; i < len(history); i++ {
-        current := history[i].System.Evolution.Level
-        previous := history[i-1].System.Evolution.Level
-        timeDiff := history[i].Timestamp.Sub(history[i-1].Timestamp).Seconds()
-        evolutionSpeeds[i-1] = (current - previous) / timeDiff
-    }
-
-    // 分析趋势稳定性
-    stability := a.calculateStability(evolutionSpeeds)
-    result.EvolutionAnalysis = types.EvolutionAnalysis{
-        AverageSpeed: a.calculateAverage(evolutionSpeeds),
-        Stability:    stability,
-        Trend:       a.determineTrend(evolutionSpeeds),
-    }
+    return nil
 }
 
 // analyzeFieldDynamics 分析场动力学
-func (a *Analyzer) analyzeFieldDynamics(result *types.AnalysisResult, history []types.MetricsData) {
-    if len(history) < 2 {
-        return
-    }
+func (a *Analyzer) analyzeFieldDynamics(result *AnalysisResult) error {
+    field := result.ModelMetrics.Field
+    
+    result.FieldAnalysis.Strength = field.Strength
+    result.FieldAnalysis.Uniformity = calculateFieldUniformity(field)
+    result.FieldAnalysis.Coupling = calculateFieldCoupling(field)
+    result.FieldAnalysis.Resonance = calculateResonance(field)
 
-    // 计算场强度变化
-    fieldStrengths := make([]float64, len(history))
-    for i, metrics := range history {
-        fieldStrengths[i] = metrics.System.Field.Strength
-    }
-
-    // 分析场的稳定性和波动
-    result.FieldAnalysis = types.FieldAnalysis{
-        Stability:    a.calculateFieldStability(fieldStrengths),
-        Oscillation:  a.detectOscillations(fieldStrengths),
-        Coherence:    a.calculateFieldCoherence(history),
-    }
-}
-
-// analyzeQuantumStates 分析量子态
-func (a *Analyzer) analyzeQuantumStates(result *types.AnalysisResult, history []types.MetricsData) {
-    quantumStates := make([]types.QuantumState, len(history))
-    for i, metrics := range history {
-        quantumStates[i] = metrics.System.Quantum
-    }
-
-    result.QuantumAnalysis = types.QuantumAnalysis{
-        Entanglement: a.calculateEntanglement(quantumStates),
-        Coherence:    a.calculateQuantumCoherence(quantumStates),
-        Stability:    a.calculateQuantumStability(quantumStates),
-    }
+    return nil
 }
 
 // analyzeEmergentPatterns 分析涌现模式
-func (a *Analyzer) analyzeEmergentPatterns(result *types.AnalysisResult, history []types.MetricsData) {
-    patterns := make([]types.EmergentPattern, 0)
+func (a *Analyzer) analyzeEmergentPatterns(result *AnalysisResult) error {
+    patterns := detectEmergentPatterns(result.SystemMetrics, result.ModelMetrics)
     
-    // 提取涌现模式
-    for _, metrics := range history {
-        if metrics.System.Emergence.Pattern != nil {
-            patterns = append(patterns, metrics.System.Emergence.Pattern)
-        }
-    }
+    result.EmergenceAnalysis.Patterns = patterns
+    result.EmergenceAnalysis.Complexity = calculateComplexity(patterns)
+    result.EmergenceAnalysis.Stability = calculatePatternStability(patterns)
+    result.EmergenceAnalysis.Potential = calculateEmergencePotential(patterns)
 
-    // 分析模式特征
-    result.EmergenceAnalysis = types.EmergenceAnalysis{
-        Patterns:    a.identifyPatterns(patterns),
-        Complexity: a.calculateComplexity(patterns),
-        Stability:  a.calculatePatternStability(patterns),
-    }
+    return nil
 }
 
-// predictFutureStates 预测未来状态
-func (a *Analyzer) predictFutureStates(result *types.AnalysisResult, history []types.MetricsData) {
-    if len(history) < a.config.WindowSize {
-        return
+// generatePredictions 生成预测
+func (a *Analyzer) generatePredictions(result *AnalysisResult) error {
+    // 预测下一个模型状态
+    nextState, err := predictNextState(result.ModelMetrics)
+    if err != nil {
+        return err
     }
+    result.Predictions.NextState = nextState
 
-    // 使用时间序列分析预测未来状态
-    predictions := types.Predictions{
-        Energy:     a.predictEnergy(history),
-        Field:      a.predictField(history),
-        Quantum:    a.predictQuantum(history),
-        Emergence:  a.predictEmergence(history),
-    }
+    // 预测能量趋势
+    result.Predictions.EnergyTrend = predictEnergyTrend(result.ModelMetrics)
 
-    result.Predictions = predictions
+    // 预测场演化
+    result.Predictions.FieldEvolution = predictFieldEvolution(result.ModelMetrics)
+
+    // 预测涌现概率
+    result.Predictions.EmergenceProb = predictEmergenceProbabilities(result.EmergenceAnalysis)
+
+    return nil
 }
 
-// generateInsights 生成洞察和建议
-func (a *Analyzer) generateInsights(result *types.AnalysisResult) {
+// generateInsights 生成洞察
+func (a *Analyzer) generateInsights(result *AnalysisResult) error {
     insights := make([]types.Insight, 0)
 
-    // 基于演化分析生成洞察
-    if result.EvolutionAnalysis.Stability < a.config.Thresholds["min_stability"] {
+    // 基于量子分析生成洞察
+    if result.QuantumAnalysis.Coherence < a.config.Thresholds["min_coherence"] {
         insights = append(insights, types.Insight{
-            Type:    "evolution_stability",
+            Type:    "quantum_coherence",
             Level:   types.SeverityWarning,
-            Message: "System evolution showing signs of instability",
-            Recommendation: "Consider adjusting evolution parameters",
+            Message: "Low quantum coherence detected",
+            Recommendation: "Consider adjusting quantum parameters",
         })
     }
 
     // 基于场分析生成洞察
-    if result.FieldAnalysis.Oscillation > a.config.Thresholds["max_oscillation"] {
+    if result.FieldAnalysis.Stability < a.config.Thresholds["min_field_stability"] {
         insights = append(insights, types.Insight{
-            Type:    "field_oscillation",
+            Type:    "field_stability",
             Level:   types.SeverityWarning,
-            Message: "Excessive field oscillations detected",
-            Recommendation: "Implement field dampening measures",
+            Message: "Field instability detected",
+            Recommendation: "Implement field stabilization measures",
         })
     }
 
     result.Insights = insights
+    return nil
 }
 
-// 工具函数
-
-func (a *Analyzer) calculateAverage(values []float64) float64 {
-    if len(values) == 0 {
-        return 0
-    }
-    sum := 0.0
-    for _, v := range values {
-        sum += v
-    }
-    return sum / float64(len(values))
+// 辅助函数...
+func calculateEntanglement(quantum model.QuantumState) float64 {
+    // 实现量子纠缠度计算
+    return quantum.GetEntanglement()
 }
 
-func (a *Analyzer) calculateStability(values []float64) float64 {
-    if len(values) < 2 {
+func calculateCoherence(quantum model.QuantumState) float64 {
+    // 实现相干性计算
+    return quantum.GetCoherence()
+}
+
+func calculateQuantumStability(quantum model.QuantumState) float64 {
+    // 实现量子态稳定性计算
+    phase := quantum.GetPhase()
+    amplitude := quantum.GetAmplitude()
+    return (1.0 - math.Abs(math.Sin(phase))) * amplitude
+}
+
+func calculateFieldUniformity(field model.FieldState) float64 {
+    // 实现场均匀性计算
+    gradient := field.GetGradient()
+    maxGradient := 0.0
+    for _, g := range gradient {
+        if math.Abs(g) > maxGradient {
+            maxGradient = math.Abs(g)
+        }
+    }
+    return 1.0 - (maxGradient / field.GetStrength())
+}
+
+func calculateFieldCoupling(field model.FieldState) float64 {
+    // 实现场耦合强度计算
+    return field.GetCoupling()
+}
+
+func calculateResonance(field model.FieldState) float64 {
+    // 实现共振强度计算
+    return field.GetResonance()
+}
+
+func detectEmergentPatterns(systemMetrics types.MetricsData, modelMetrics model.ModelMetrics) []types.EmergentPattern {
+    patterns := make([]types.EmergentPattern, 0)
+    
+    // 检测系统级涌现模式
+    systemPatterns := detectSystemPatterns(systemMetrics)
+    patterns = append(patterns, systemPatterns...)
+    
+    // 检测模型级涌现模式
+    modelPatterns := detectModelPatterns(modelMetrics)
+    patterns = append(patterns, modelPatterns...)
+    
+    return patterns
+}
+
+func calculateComplexity(patterns []types.EmergentPattern) float64 {
+    if len(patterns) == 0 {
+        return 0.0
+    }
+    
+    totalComplexity := 0.0
+    for _, pattern := range patterns {
+        totalComplexity += pattern.Complexity
+    }
+    return totalComplexity / float64(len(patterns))
+}
+
+func calculatePatternStability(patterns []types.EmergentPattern) float64 {
+    if len(patterns) == 0 {
         return 1.0
     }
     
-    variance := 0.0
-    mean := a.calculateAverage(values)
-    
-    for _, v := range values {
-        diff := v - mean
-        variance += diff * diff
+    totalStability := 0.0
+    for _, pattern := range patterns {
+        totalStability += pattern.Stability
     }
-    
-    variance /= float64(len(values))
-    return 1.0 / (1.0 + math.Sqrt(variance))
+    return totalStability / float64(len(patterns))
 }
 
-func (a *Analyzer) determineTrend(values []float64) string {
-    if len(values) < 2 {
-        return "stable"
+func calculateEmergencePotential(patterns []types.EmergentPattern) float64 {
+    // 计算涌现潜力
+    potential := 0.0
+    weights := map[string]float64{
+        "complexity": 0.3,
+        "stability":  0.3,
+        "coupling":   0.4,
     }
     
-    lastValues := values[len(values)-3:]
-    increasing := 0
-    decreasing := 0
-    
-    for i := 1; i < len(lastValues); i++ {
-        if lastValues[i] > lastValues[i-1] {
-            increasing++
-        } else if lastValues[i] < lastValues[i-1] {
-            decreasing++
-        }
+    for _, pattern := range patterns {
+        weightedSum := pattern.Complexity * weights["complexity"] +
+                      pattern.Stability * weights["stability"] +
+                      pattern.Coupling * weights["coupling"]
+        potential += weightedSum
     }
     
-    if increasing > decreasing {
-        return "increasing"
-    } else if decreasing > increasing {
-        return "decreasing"
-    }
-    return "stable"
+    return math.Min(1.0, potential/float64(len(patterns)))
 }
 
-// handleError 处理错误
-func (a *Analyzer) handleError(err error) {
-    a.mu.Lock()
-    defer a.mu.Unlock()
+func predictNextState(metrics model.ModelMetrics) (model.ModelState, error) {
+    // 使用当前指标预测下一个状态
+    predictor := model.NewStatePredictor()
+    return predictor.PredictNext(metrics)
+}
 
-    a.status.errors = append(a.status.errors, err)
+func predictEnergyTrend(metrics model.ModelMetrics) float64 {
+    // 预测能量趋势
+    currentEnergy := metrics.GetTotalEnergy()
+    previousEnergy := metrics.GetPreviousEnergy()
+    return (currentEnergy - previousEnergy) / previousEnergy
+}
+
+func predictFieldEvolution(metrics model.ModelMetrics) []float64 {
+    // 预测场演化序列
+    evolution := make([]float64, 10) // 预测未来10个时间步
+    currentField := metrics.Field.GetStrength()
+    
+    for i := range evolution {
+        // 简单线性预测示例
+        evolution[i] = currentField * (1 + float64(i)*0.1)
+    }
+    
+    return evolution
+}
+
+func predictEmergenceProbabilities(analysis struct {
+    Patterns    []types.EmergentPattern
+    Complexity  float64
+    Stability   float64
+    Potential   float64
+}) map[string]float64 {
+    probs := make(map[string]float64)
+    
+    // 基于当前分析预测各类涌现模式的概率
+    for _, pattern := range analysis.Patterns {
+        probability := calculatePatternProbability(pattern, analysis.Complexity, analysis.Stability)
+        probs[pattern.Type] = probability
+    }
+    
+    return probs
+}
+
+func calculatePatternProbability(pattern types.EmergentPattern, complexity, stability float64) float64 {
+    // 基于模式特征、复杂度和稳定性计算概率
+    baseProbability := pattern.Strength * stability
+    adjustedProbability := baseProbability * (1 - complexity/2) // 复杂度越高，概率越低
+    
+    return math.Max(0, math.Min(1, adjustedProbability))
 }
 
 // cacheResult 缓存分析结果
-func (a *Analyzer) cacheResult(result types.AnalysisResult) {
+func (a *Analyzer) cacheResult(result *AnalysisResult) {
     a.mu.Lock()
     defer a.mu.Unlock()
 
     a.cache.lastAnalysis = result
     a.cache.history = append(a.cache.history, result)
+    a.cache.modelMetrics = &result.ModelMetrics
 
-    // 维护缓存大小
-    if len(a.cache.history) > 100 {
+    // 维护历史大小
+    if len(a.cache.history) > a.config.MaxHistorySize {
         a.cache.history = a.cache.history[1:]
     }
+}
+
+// GetLastAnalysis 获取最新分析结果
+func (a *Analyzer) GetLastAnalysis() *AnalysisResult {
+    a.mu.RLock()
+    defer a.mu.RUnlock()
+    return a.cache.lastAnalysis
+}
+
+// GetAnalysisHistory 获取分析历史
+func (a *Analyzer) GetAnalysisHistory(limit int) []*AnalysisResult {
+    a.mu.RLock()
+    defer a.mu.RUnlock()
+
+    if limit <= 0 || limit > len(a.cache.history) {
+        limit = len(a.cache.history)
+    }
+
+    history := make([]*AnalysisResult, limit)
+    copy(history, a.cache.history[len(a.cache.history)-limit:])
+    return history
+}
+
+// generateAnalysisID 生成分析ID
+func generateAnalysisID() string {
+    return fmt.Sprintf("analysis-%d", time.Now().UnixNano())
 }
