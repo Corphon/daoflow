@@ -18,22 +18,15 @@ type SystemInterface interface {
     Reset() error
     Shutdown(ctx context.Context) error
     
-    // 状态管理
-    GetState() SystemState
-    GetStatus() SystemStatus
+    // 状态访问
+    GetState() model.SystemState
+    GetModelState() model.ModelState
     GetMetrics() MetricsData
-    GetHealth() HealthStatus
     
-    // 演化控制
-    Evolve(params EvolutionParams) error
-    Adapt(params AdaptationParams) error
+    // 系统操作
+    Transform(pattern model.TransformPattern) error
     Synchronize(params SyncParams) error
     Optimize(params OptimizationParams) error
-    
-    // 资源管理
-    AllocateResources(req ResourceReq) error
-    ReleaseResources(id string) error
-    GetResourceStatus() ResourceStats
     
     // 事件处理
     HandleEvent(event SystemEvent) error
@@ -43,22 +36,21 @@ type SystemInterface interface {
 
 // MetaSystemInterface 元系统接口
 type MetaSystemInterface interface {
-    // 场操作
-    InitializeField(params FieldParams) error
-    UpdateField(params FieldParams) error
-    GetFieldState() FieldState
+    // 场操作 - 使用 model 的场状态
+    InitializeField(params model.FieldParams) error
+    UpdateField(state model.FieldState) error
+    GetFieldState() model.FieldState
     
-    // 量子场操作
+    // 量子操作 - 使用 model 的量子状态
     InitializeQuantumField() error
-    UpdateQuantumState(state QuantumState) error
-    GetQuantumState() QuantumState
+    UpdateQuantumState(state model.QuantumState) error
+    GetQuantumState() model.QuantumState
     MeasureQuantumState() (float64, error)
     
     // 涌现操作
     DetectEmergence() []EmergentProperty
     PredictEmergence() []PotentialEmergence
     HandleEmergence(property EmergentProperty) error
-    AnalyzePattern(pattern EmergentPattern) error
     
     // 共振操作
     InitializeResonance(params ResonanceParams) error
@@ -69,21 +61,16 @@ type MetaSystemInterface interface {
 
 // EvolutionInterface 演化接口
 type EvolutionInterface interface {
-    // 演化控制
+    // 演化控制 - 与 model 的演化对齐
     SetEvolutionParams(params EvolutionParams) error
-    GetEvolutionStatus() EvolutionMetrics
-    AdjustEvolution(adjustment float64) error
+    GetEvolutionMetrics() model.ModelMetrics
+    AdjustEvolution(delta float64) error
     
     // 路径管理
-    PlanEvolutionPath(target SystemState) ([]EvolutionPoint, error)
+    PlanEvolutionPath(target model.SystemState) ([]EvolutionPoint, error)
     ValidateEvolutionPath(path []EvolutionPoint) error
     ExecuteEvolutionStep() error
     RollbackEvolution() error
-    
-    // 能量管理
-    CalculateEvolutionEnergy() float64
-    OptimizeEnergyUsage() error
-    PredictEnergyNeeds() float64
 }
 
 // ResourceInterface 资源管理接口
@@ -106,7 +93,7 @@ type ResourceInterface interface {
 
 // MonitorInterface 监控接口
 type MonitorInterface interface {
-    // 指标管理
+    // 指标管理 - 包含 model 的指标
     CollectMetrics() MetricsData
     ProcessMetrics(data MetricsData) error
     StoreMetrics(data MetricsData) error
@@ -122,112 +109,77 @@ type MonitorInterface interface {
     ReportStatus() SystemStatus
 }
 
-// EventHandler 事件处理器接口
-type EventHandler interface {
-    HandleEvent(event SystemEvent) error
-    GetHandlerID() string
-    GetEventTypes() []EventType
-}
-
-// ConfigManager 配置管理接口
-type ConfigManager interface {
-    // 配置操作
+// ConfigInterface 配置接口
+type ConfigInterface interface {
+    // 配置管理
     LoadConfig(path string) error
     SaveConfig(path string) error
     ValidateConfig() error
     
-    // 配置访问
-    GetValue(key string) interface{}
-    SetValue(key string, value interface{}) error
-    GetSection(section string) interface{}
+    // 模型配置 - 与 model 配置集成
+    GetModelConfig() model.ModelConfig
+    UpdateModelConfig(config model.ModelConfig) error
     
-    // 配置监控
-    WatchConfig(handler ConfigHandler) error
-    StopWatch(handler ConfigHandler) error
+    // 系统配置
+    GetSystemConfig() SystemConfig
+    UpdateSystemConfig(config SystemConfig) error
 }
 
-// ConfigHandler 配置处理器接口
-type ConfigHandler interface {
-    OnConfigChange(old, new interface{}) error
-    GetHandlerID() string
-}
-
-// StateManager 状态管理接口
-type StateManager interface {
-    // 状态操作
-    GetCurrentState() SystemState
-    SetState(state SystemState) error
-    ValidateState(state SystemState) error
-    
-    // 状态转换
-    TransitionTo(target SystemState) error
-    RollbackState() error
-    GetStateHistory() []StateTransition
-    
-    // 状态监控
-    WatchState(handler StateHandler) error
-    StopWatch(handler StateHandler) error
-}
-
-// StateHandler 状态处理器接口
+// StateHandler 状态处理接口
 type StateHandler interface {
-    OnStateChange(old, new SystemState) error
+    // 状态变更处理
+    OnStateChange(old, new model.SystemState) error
+    OnModelStateChange(old, new model.ModelState) error
+    
+    // 处理器标识
     GetHandlerID() string
+    GetPriority() Priority
 }
 
-// MetricsCollector 指标收集器接口
+// MetricsCollector 指标收集接口
 type MetricsCollector interface {
-    // 指标收集
-    Collect() MetricsData
-    Process(data MetricsData) error
-    Store(data MetricsData) error
+    // 指标收集 - 包含 model 指标
+    CollectModelMetrics() model.ModelMetrics
+    CollectSystemMetrics() MetricsData
+    
+    // 指标处理
+    ProcessMetrics(modelMetrics model.ModelMetrics, sysMetrics MetricsData) error
+    StoreMetrics(data MetricsData) error
     
     // 指标查询
     Query(filter MetricsFilter) []MetricsData
-    GetLatest() MetricsData
     GetHistory(duration time.Duration) []MetricsData
-    
-    // 配置管理
-    Configure(config MetricsConfig) error
-    GetConfig() MetricsConfig
 }
 
-// AlertManager 告警管理器接口
-type AlertManager interface {
-    // 告警处理
-    CheckAlerts() []Alert
-    HandleAlert(alert Alert) error
-    ClearAlert(id string) error
+// SyncController 同步控制接口
+type SyncController interface {
+    // 同步控制
+    SyncModelState(state model.ModelState) error
+    SyncSystemState(state model.SystemState) error
     
-    // 告警配置
-    ConfigureAlerts(config AlertConfig) error
-    GetAlertConfig() AlertConfig
-    
-    // 告警查询
-    GetActiveAlerts() []Alert
-    GetAlertHistory(filter AlertFilter) []Alert
+    // 同步配置
+    SetSyncMode(mode SyncMode) error
+    GetSyncStatus() SyncStatus
 }
 
-// HealthChecker 健康检查接口
-type HealthChecker interface {
-    // 健康检查
-    Check() HealthStatus
-    DiagnoseIssue(issue Issue) error
-    GetHealthMetrics() HealthMetrics
+// OptimizationController 优化控制接口
+type OptimizationController interface {
+    // 优化控制
+    OptimizeModelParams(params model.ModelConfig) error
+    OptimizeSystemParams(params SystemConfig) error
     
-    // 配置
-    SetHealthChecks(checks []HealthCheck) error
-    ConfigureThresholds(thresholds map[string]float64) error
+    // 优化状态
+    GetOptimizationStatus() OptimizationStatus
+    SetOptimizationGoals(goals OptimizationGoals) error
 }
 
-// ResourcePredictor 资源预测接口
-type ResourcePredictor interface {
-    // 预测
-    PredictUsage(duration time.Duration) ResourcePrediction
-    AnalyzeTrends() []ResourceTrend
-    OptimizePrediction() error
+// EventProcessor 事件处理接口
+type EventProcessor interface {
+    // 事件处理
+    ProcessModelEvent(event model.ModelEvent) error
+    ProcessSystemEvent(event SystemEvent) error
     
-    // 配置
-    ConfigurePredictor(config PredictorConfig) error
-    GetAccuracy() float64
+    // 事件订阅
+    Subscribe(eventType EventType, handler EventHandler) error
+    Unsubscribe(eventType EventType, handler EventHandler) error
 }
