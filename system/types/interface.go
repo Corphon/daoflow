@@ -34,6 +34,43 @@ type SystemInterface interface {
 	GetResourceStatus() ResourceStat
 }
 
+// 扩展 MetaInterface
+type MetaInterface interface {
+    // 原有接口
+    InitializeField() error
+    UpdateField(params FieldParams) error
+    GetFieldState() FieldState
+    
+    // 新增量子场接口
+    InitializeQuantumField() error
+    UpdateQuantumState(state QuantumState) error
+    GetQuantumFieldState() QuantumFieldState
+    
+    // 增强涌现接口
+    PredictEmergence() []PotentialEmergence
+    AnalyzeEmergencePattern(pattern EmergentPattern) error
+    
+    // 增强共振接口
+    EstablishResonance(source, target string) error
+    MaintainCoherence(params CoherenceParams) error
+}
+
+// 添加量子场相关结构
+type QuantumState struct {
+    Wave       []complex128  `json:"wave"`       // 波函数
+    Phase      float64      `json:"phase"`      // 相位
+    Entangled  bool         `json:"entangled"`  // 纠缠状态
+    Coherence  float64      `json:"coherence"`  // 相干度
+}
+
+// 添加场态预测结构
+type PotentialEmergence struct {
+    Pattern    EmergentPattern `json:"pattern"`
+    Probability float64       `json:"probability"`
+    TimeFrame   time.Duration `json:"time_frame"`
+    Impact      float64       `json:"impact"`
+}
+
 // ResourceReq 资源请求结构
 type ResourceReq struct {
 	ID       string    `json:"id"`       // 资源请求ID
