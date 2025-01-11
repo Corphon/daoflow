@@ -2,6 +2,20 @@
 
 package types
 
+import (
+    "github.com/Corphon/daoflow/model"
+)
+
+// 复用 model 包中的类型
+type (
+    SystemState = model.SystemState
+    ModelType = model.ModelType
+    Phase = model.Phase
+    Nature = model.Nature
+    Element = model.Element
+    TransformPattern = model.TransformPattern
+)
+
 // SystemLayer 系统层级常量
 type SystemLayer uint8
 
@@ -9,22 +23,10 @@ const (
     LayerNone SystemLayer = iota
     LayerMeta             // 元系统层
     LayerEvolution        // 演化系统层
-    LayerStructure        // 结构系统层
-    LayerSync            // 同步系统层
+    LayerControl         // 控制系统层
+    LayerResource        // 资源系统层
+    LayerMonitor         // 监控系统层
     LayerMax
-)
-
-// SystemState 系统状态常量
-type SystemState uint8
-
-const (
-    StateNone SystemState = iota
-    StateInitializing    // 初始化中
-    StateRunning        // 运行中
-    StatePaused         // 暂停
-    StateStopped        // 停止
-    StateError         // 错误
-    StateMax
 )
 
 // ComponentState 组件状态常量
@@ -36,16 +38,16 @@ const (
     CompStateError
 )
 
-// MetricType 指标类型常量
+// MetricType 指标类型常量 - 扩展模型层的指标类型
 type MetricType uint8
 
 const (
     MetricNone MetricType = iota
-    MetricEnergy          // 能量指标
-    MetricField           // 场指标
-    MetricQuantum         // 量子指标
-    MetricEmergence       // 涌现指标
-    MetricMax
+    MetricSystem         // 系统指标
+    MetricProcess        // 处理指标
+    MetricResource       // 资源指标
+    MetricPerformance    // 性能指标
+    MetricSecurity       // 安全指标
 )
 
 // EventType 事件类型常量
@@ -53,12 +55,11 @@ type EventType uint8
 
 const (
     EventStateChange EventType = iota
-    EventEvolution
-    EventAdaptation
-    EventSync
-    EventOptimization
-    EventResource
-    EventError
+    EventResource              // 资源事件
+    EventMetric               // 指标事件
+    EventAlert                // 告警事件
+    EventAudit                // 审计事件
+    EventSystem               // 系统事件
 )
 
 // Priority 优先级常量
@@ -72,133 +73,65 @@ const (
     PriorityHighest
 )
 
-// PatternType 模式类型常量
-type PatternType uint8
-
-const (
-    PatternNone PatternType = iota
-    PatternLinear          // 线性模式
-    PatternCyclic          // 循环模式
-    PatternSpiral          // 螺旋模式
-    PatternEmergent        // 涌现模式
-    PatternMax
-)
-
-// AdaptMode 适应模式常量
-type AdaptMode uint8
-
-const (
-    AdaptReactive AdaptMode = iota
-    AdaptProactive
-    AdaptHybrid
-)
-
 // SyncMode 同步模式常量
 type SyncMode uint8
 
 const (
-    SyncPhase SyncMode = iota
-    SyncFrequency
-    SyncEnergy
+    SyncImmediate SyncMode = iota  // 立即同步
+    SyncBatch                      // 批量同步
+    SyncPeriodic                   // 周期同步
+    SyncAdaptive                   // 自适应同步
 )
 
-// OptimMethod 优化方法常量
-type OptimMethod uint8
-
+// 系统级阈值常量
 const (
-    OptimGradient OptimMethod = iota
-    OptimGenetic
-    OptimParticleSwarm
+    // 系统容量
+    MinSystemCapacity = 100
+    MaxSystemCapacity = 10000
+    DefaultCapacity   = 1000
+
+    // 处理限制
+    MaxConcurrent    = 100    // 最大并发数
+    MaxQueueSize     = 10000  // 最大队列大小
+    MaxBatchSize     = 1000   // 最大批处理大小
+    
+    // 时间限制
+    MinInterval      = 100    // 最小间隔(ms)
+    MaxInterval      = 60000  // 最大间隔(ms)
+    DefaultInterval  = 1000   // 默认间隔(ms)
+    
+    // 资源限制
+    MinWorkers       = 1      // 最小工作协程数
+    MaxWorkers       = 100    // 最大工作协程数
+    DefaultWorkers   = 10     // 默认工作协程数
 )
 
-// IssueType 问题类型常量
-type IssueType uint8
-
+// 监控常量
 const (
-    IssueResource IssueType = iota
-    IssuePerformance
-    IssueSecurity
-    IssueStability
+    // 指标采集
+    MetricsInterval   = 15    // 指标采集间隔(s)
+    MetricsRetention  = 7     // 指标保留天数
+    
+    // 告警阈值
+    AlertCriticalThreshold = 0.9  // 严重告警阈值
+    AlertWarningThreshold  = 0.7  // 警告告警阈值
+    AlertInfoThreshold     = 0.5  // 信息告警阈值
 )
 
-// IssueSeverity 问题严重度常量
-type IssueSeverity uint8
-
+// 配置常量
 const (
-    SeverityInfo IssueSeverity = iota
-    SeverityWarning
-    SeverityError
-    SeverityCritical
-)
-
-// 系统阈值常量
-const (
-    // 能量阈值
-    MinEnergy     = 0.0
-    MaxEnergy     = 100.0
-    DefaultEnergy = 50.0
-
-    // 场强度阈值
-    MinFieldStrength = 0.0
-    MaxFieldStrength = 1.0
-    DefaultStrength  = 0.5
-
-    // 相位阈值
-    MinPhase     = 0.0
-    MaxPhase     = 2 * 3.14159265359 // 2π
-    DefaultPhase = 0.0
-
-    // 时间常量
-    DefaultTimeout = 30 // 默认超时时间(秒)
-    MinInterval   = 1  // 最小间隔时间(秒)
-    MaxInterval   = 60 // 最大间隔时间(秒)
-)
-
-// 容量常量
-const (
-    MinCapacity     = 1
-    MaxCapacity     = 1000
-    DefaultCapacity = 100
-
-    // 缓冲区大小
-    MinBufferSize     = 16
-    DefaultBufferSize = 256
-    MaxBufferSize     = 4096
-)
-
-// 维度常量
-const (
-    // 空间维度
-    SpaceDimension2D = 2
-    SpaceDimension3D = 3
-    SpaceDimension4D = 4
-
-    // 场维度
-    FieldDimensionScalar = 1
-    FieldDimensionVector = 3
-    FieldDimensionTensor = 9
-)
-
-// 配置默认值
-const (
-    DefaultConfigPath = "config/system.yaml"
-    DefaultLogPath    = "log/system.log"
-    DefaultDataPath   = "data/system"
-
-    // 监控配置
-    DefaultMetricsInterval = 10 // 秒
-    DefaultReportInterval = 60  // 秒
-    DefaultRetentionDays  = 30  // 天
-
-    // 系统限制
-    MaxGoroutines  = 10000 // 最大协程数
-    MaxConnections = 1000  // 最大连接数
-    MaxQueueSize   = 10000 // 最大队列大小
-    MaxRetries     = 3     // 最大重试次数
-
-    // 验证限制
-    MinNameLength = 3
-    MaxNameLength = 64
-    MinDescLength = 0
-    MaxDescLength = 256
+    // 路径配置
+    DefaultConfigPath = "configs/"
+    DefaultLogPath    = "logs/"
+    DefaultDataPath   = "data/"
+    
+    // 文件配置
+    MaxFileSize      = 100 << 20  // 最大文件大小(100MB)
+    MaxFileAge       = 30         // 最大文件保留天数
+    
+    // 验证配置
+    MinNameLen       = 2
+    MaxNameLen       = 64
+    MinDescLen       = 0
+    MaxDescLen       = 256
 )
