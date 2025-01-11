@@ -1,5 +1,4 @@
 //system/control/sync/coordinator.go
-// control/sync/coordinator.go
 
 package sync
 
