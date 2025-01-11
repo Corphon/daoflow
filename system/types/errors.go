@@ -9,51 +9,73 @@ import (
     "time"
 )
 
-// ErrorCode 错误码
-type ErrorCode string
+// ErrorCode 错误码类型
+type ErrorCode uint32
 
-// 系统层错误码
+// 系统错误码定义
 const (
-    // 基础错误
-    ErrNone          ErrorCode = ""
-    ErrInternal      ErrorCode = "internal"      // 内部错误
-    ErrInvalid       ErrorCode = "invalid"       // 无效参数
-    ErrNotFound      ErrorCode = "not_found"     // 未找到
-    ErrExists        ErrorCode = "exists"        // 已存在
+    // 基础错误 (0-999)
+    ErrNone        ErrorCode = 0   // 无错误
+    ErrUnknown     ErrorCode = 1   // 未知错误
+    ErrInternal    ErrorCode = 2   // 内部错误
+    ErrInvalid     ErrorCode = 3   // 无效参数
+    ErrNotFound    ErrorCode = 4   // 未找到
+    ErrExists      ErrorCode = 5   // 已存在
     
-    // 初始化错误
-    ErrInitSystem    ErrorCode = "init_system"   // 系统初始化错误
-    ErrInitMeta      ErrorCode = "init_meta"     // 元系统初始化错误
-    ErrInitEvolution ErrorCode = "init_evolution" // 演化系统初始化错误
+    // 初始化错误 (1000-1999)
+    ErrInitialize      ErrorCode = 1000 // 初始化错误
+    ErrInitConfig      ErrorCode = 1001 // 配置初始化错误
+    ErrInitMeta        ErrorCode = 1002 // 元系统初始化错误
+    ErrInitEvolution   ErrorCode = 1003 // 演化系统初始化错误
+    ErrInitResource    ErrorCode = 1004 // 资源系统初始化错误
     
-    // 运行时错误
-    ErrRuntime       ErrorCode = "runtime"       // 运行时错误
-    ErrTimeout       ErrorCode = "timeout"       // 超时错误
-    ErrOverflow      ErrorCode = "overflow"      // 溢出错误
-    ErrUnderflow     ErrorCode = "underflow"     // 下溢错误
+    // 运行时错误 (2000-2999)
+    ErrRuntime         ErrorCode = 2000 // 运行时错误
+    ErrTimeout         ErrorCode = 2001 // 超时错误
+    ErrOverflow        ErrorCode = 2002 // 溢出错误
+    ErrUnderflow       ErrorCode = 2003 // 下溢错误
+    ErrDeadlock        ErrorCode = 2004 // 死锁错误
+    ErrRace           ErrorCode = 2005 // 竞争条件
     
-    // 状态错误
-    ErrState        ErrorCode = "state"         // 状态错误
-    ErrTransition   ErrorCode = "transition"    // 转换错误
-    ErrValidation   ErrorCode = "validation"    // 验证错误
+    // 状态错误 (3000-3999)
+    ErrState          ErrorCode = 3000 // 状态错误
+    ErrStateTransition ErrorCode = 3001 // 状态转换错误
+    ErrStateValidation ErrorCode = 3002 // 状态验证错误
+    ErrStateConflict   ErrorCode = 3003 // 状态冲突
     
-    // 资源错误
-    ErrResource     ErrorCode = "resource"      // 资源错误
-    ErrCapacity     ErrorCode = "capacity"      // 容量错误
-    ErrExhausted    ErrorCode = "exhausted"     // 资源耗尽
+    // 资源错误 (4000-4999)
+    ErrResource       ErrorCode = 4000 // 资源错误
+    ErrResourceAlloc  ErrorCode = 4001 // 资源分配错误
+    ErrResourceExhaust ErrorCode = 4002 // 资源耗尽
+    ErrResourceLimit   ErrorCode = 4003 // 资源限制
     
-    // 同步错误
-    ErrSync         ErrorCode = "sync"          // 同步错误
-    ErrDeadlock     ErrorCode = "deadlock"      // 死锁错误
-    ErrRace         ErrorCode = "race"          // 竞争条件
+    // 演化错误 (5000-5999)
+    ErrEvolution      ErrorCode = 5000 // 演化错误
+    ErrEvolutionPath  ErrorCode = 5001 // 演化路径错误
+    ErrEvolutionStuck ErrorCode = 5002 // 演化停滞
     
-    // 配置错误
-    ErrConfig       ErrorCode = "config"        // 配置错误
-    ErrParse        ErrorCode = "parse"         // 解析错误
-    ErrValidate     ErrorCode = "validate"      // 校验错误
+    // 适应错误 (6000-6999)
+    ErrAdaptation     ErrorCode = 6000 // 适应错误
+    ErrAdaptFailed    ErrorCode = 6001 // 适应失败
+    ErrAdaptTimeout   ErrorCode = 6002 // 适应超时
+    
+    // 同步错误 (7000-7999)
+    ErrSync          ErrorCode = 7000 // 同步错误
+    ErrSyncConflict  ErrorCode = 7001 // 同步冲突
+    ErrSyncTimeout   ErrorCode = 7002 // 同步超时
+    
+    // 量子场错误 (8000-8999)
+    ErrQuantum       ErrorCode = 8000 // 量子场错误
+    ErrQuantumState  ErrorCode = 8001 // 量子态错误
+    ErrQuantumCollapse ErrorCode = 8002 // 量子态崩溃
+    
+    // 涌现错误 (9000-9999)
+    ErrEmergence     ErrorCode = 9000 // 涌现错误
+    ErrEmergPattern  ErrorCode = 9001 // 涌现模式错误
+    ErrEmergFailure  ErrorCode = 9002 // 涌现失败
 )
 
-// SystemError 系统错误
+// SystemError 系统错误结构
 type SystemError struct {
     Code      ErrorCode           // 错误码
     Message   string             // 错误消息
@@ -63,6 +85,7 @@ type SystemError struct {
     Time      time.Time          // 错误时间
     Layer     SystemLayer        // 错误发生层
     Context   map[string]string  // 错误上下文
+    Severity  IssueSeverity      // 错误严重度
 }
 
 // Error 实现 error 接口
@@ -70,11 +93,14 @@ func (e *SystemError) Error() string {
     var b strings.Builder
     
     // 构建错误消息
-    b.WriteString(fmt.Sprintf("[%s] %s", e.Code, e.Message))
+    b.WriteString(fmt.Sprintf("[%d] %s", e.Code, e.Message))
+    
+    // 添加严重度
+    b.WriteString(fmt.Sprintf(" (Severity: %v)", e.Severity))
     
     // 添加层级信息
     if e.Layer != LayerNone {
-        b.WriteString(fmt.Sprintf(" (Layer: %v)", e.Layer))
+        b.WriteString(fmt.Sprintf(" [Layer: %v]", e.Layer))
     }
     
     // 添加详细信息
@@ -85,6 +111,14 @@ func (e *SystemError) Error() string {
     // 添加原因错误
     if e.Cause != nil {
         b.WriteString(fmt.Sprintf("\nCaused by: %v", e.Cause))
+    }
+    
+    // 添加上下文信息
+    if len(e.Context) > 0 {
+        b.WriteString("\nContext:")
+        for k, v := range e.Context {
+            b.WriteString(fmt.Sprintf("\n  %s: %s", k, v))
+        }
     }
     
     // 添加堆栈信息
@@ -98,15 +132,16 @@ func (e *SystemError) Error() string {
     return b.String()
 }
 
-// NewSystemError 创建系统错误
+// NewSystemError 创建新的系统错误
 func NewSystemError(code ErrorCode, message string, cause error) *SystemError {
     return &SystemError{
-        Code:     code,
-        Message:  message,
-        Cause:    cause,
-        Stack:    captureStack(),
-        Time:     time.Now(),
-        Context:  make(map[string]string),
+        Code:      code,
+        Message:   message,
+        Cause:     cause,
+        Stack:     captureStack(),
+        Time:      time.Now(),
+        Context:   make(map[string]string),
+        Severity:  getSeverityForError(code),
     }
 }
 
@@ -124,7 +159,16 @@ func (e *SystemError) WithLayer(layer SystemLayer) *SystemError {
 
 // WithContext 添加上下文信息
 func (e *SystemError) WithContext(key, value string) *SystemError {
+    if e.Context == nil {
+        e.Context = make(map[string]string)
+    }
     e.Context[key] = value
+    return e
+}
+
+// WithSeverity 设置错误严重度
+func (e *SystemError) WithSeverity(severity IssueSeverity) *SystemError {
+    e.Severity = severity
     return e
 }
 
@@ -143,33 +187,12 @@ func WrapError(err error, code ErrorCode, message string) *SystemError {
             Stack:    append(captureStack(), sysErr.Stack...),
             Time:     time.Now(),
             Context:  make(map[string]string),
+            Severity: sysErr.Severity,
         }
     }
     
     // 创建新的 SystemError
     return NewSystemError(code, message, err)
-}
-
-// IsSystemError 检查是否为系统错误
-func IsSystemError(err error) bool {
-    _, ok := err.(*SystemError)
-    return ok
-}
-
-// GetErrorCode 获取错误码
-func GetErrorCode(err error) ErrorCode {
-    if sysErr, ok := err.(*SystemError); ok {
-        return sysErr.Code
-    }
-    return ErrNone
-}
-
-// GetErrorLayer 获取错误层级
-func GetErrorLayer(err error) SystemLayer {
-    if sysErr, ok := err.(*SystemError); ok {
-        return sysErr.Layer
-    }
-    return LayerNone
 }
 
 // captureStack 捕获堆栈信息
@@ -201,14 +224,28 @@ func captureStack() []string {
     return stack
 }
 
+// getSeverityForError 根据错误码确定严重度
+func getSeverityForError(code ErrorCode) IssueSeverity {
+    switch {
+    case code >= 9000:
+        return SeverityCritical
+    case code >= 7000:
+        return SeverityError
+    case code >= 5000:
+        return SeverityWarning
+    default:
+        return SeverityInfo
+    }
+}
+
 // ErrorHandler 错误处理器接口
 type ErrorHandler interface {
     Handle(error) error
 }
 
-// 错误处理相关的常量
+// 错误处理相关常量
 const (
-    MaxStackDepth    = 32    // 最大堆栈深度
-    MaxErrorHistory  = 100   // 最大错误历史记录数
-    MaxRetryAttempts = 3     // 最大重试次数
+    MaxStackDepth    = 32   // 最大堆栈深度
+    MaxErrorHistory  = 100  // 最大错误历史记录数
+    MaxRetryAttempts = 3    // 最大重试次数
 )
