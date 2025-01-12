@@ -1,4 +1,4 @@
-//system/resonance/cross.go
+//system/meta/resonance/cross.go
 
 package resonance
 
