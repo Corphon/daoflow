@@ -50,3 +50,45 @@ type PatternMatch struct {
     Similarity  float64
     Confidence  float64
 }
+
+// PatternEventEmitter 模式事件发射器接口
+type PatternEventEmitter interface {
+    EmitPatternEvent(event PatternEvent)
+    AddPatternListener(listener PatternEventListener)
+    RemovePatternListener(listener PatternEventListener)
+}
+
+// PatternEventListener 模式事件监听器接口
+type PatternEventListener interface {
+    OnPatternEvent(event PatternEvent)
+}
+
+// PatternEvent 模式事件
+type PatternEvent struct {
+    Type      string
+    Pattern   SharedPattern
+    Timestamp time.Time
+    Data      map[string]interface{}
+}
+
+// PatternProcessor 模式处理器接口
+type PatternProcessor interface {
+    ProcessPattern(pattern SharedPattern) error
+    GetProcessingResult() ProcessingResult
+}
+
+// ProcessingResult 处理结果
+type ProcessingResult struct {
+    Success    bool
+    Score      float64
+    Changes    []PatternChange
+    Timestamp  time.Time
+}
+
+// PatternChange 模式变化
+type PatternChange struct {
+    Field     string
+    OldValue  interface{}
+    NewValue  interface{}
+    Delta     float64
+}
