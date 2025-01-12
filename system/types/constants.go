@@ -6,6 +6,30 @@ import (
     "github.com/Corphon/daoflow/model"
 )
 
+// 系统级阈值常量
+const (
+    // 历史记录限制
+    MaxHistoryLength    = 1000  // 通用历史记录最大长度
+    MaxMetricsHistory  = 1000  // 指标历史最大长度
+    MaxObservations   = 1000  // 观察记录最大长度
+    
+    // 时间相关常量
+    DefaultTimeWindow  = 24 * time.Hour  // 默认时间窗口
+    MinTimeWindow     = time.Minute     // 最小时间窗口
+    MaxTimeWindow     = 7 * 24 * time.Hour // 最大时间窗口
+    
+    // 阈值常量
+    DefaultThreshold  = 0.75  // 默认阈值
+    MinThreshold     = 0.1   // 最小阈值
+    MaxThreshold     = 0.99  // 最大阈值
+    
+    // 容量相关常量
+    DefaultBatchSize  = 100   // 默认批处理大小
+    MaxBatchSize     = 1000  // 最大批处理大小
+    DefaultQueueSize = 1000  // 默认队列大小
+    MaxQueueSize    = 10000 // 最大队列大小
+)
+
 // 复用 model 包中的类型
 type (
     SystemState = model.SystemState
