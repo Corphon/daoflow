@@ -121,7 +121,7 @@ type CoordinationMetrics struct {
     SuccessRate     float64           // 成功率
     AverageLatency  time.Duration     // 平均延迟
     ConflictRate    float64           // 冲突率
-    History         []MetricPoint     // 历史指标
+    History         []types.MetricPoint     // 历史指标
 }
 
 // MetricPoint 指标点
