@@ -12,6 +12,13 @@ import (
     "github.com/Corphon/daoflow/system/types"
 )
 
+type AnalysisMetrics struct {
+    Accuracy     map[string]float64   
+    Coverage     float64              
+    Latency      time.Duration        
+    Performance  []types.MetricPoint
+}
+
 // Analyzer 指标分析器
 type Analyzer struct {
     mu sync.RWMutex
