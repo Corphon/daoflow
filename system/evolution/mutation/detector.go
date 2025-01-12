@@ -6,10 +6,7 @@ import (
     "sync"
     "time"
 
-    "github.com/Corphon/daoflow/evolution/pattern"
-    "github.com/Corphon/daoflow/meta/field"
-    "github.com/Corphon/daoflow/model"
-    "github.com/Corphon/daoflow/system/types"
+    "github.com/Corphon/daoflow/system/common" // 引入共享接口包
 )
 
 // MutationDetector 突变检测器
@@ -24,16 +21,15 @@ type MutationDetector struct {
         stabilityFactor  float64       // 稳定性因子
     }
 
+    // 使用接口而不是具体类型
+    patternAnalyzer common.PatternAnalyzer
+    
     // 检测状态
     state struct {
         mutations    map[string]*Mutation       // 已检测突变
         observations []MutationObservation      // 观察记录
         baselines   map[string]*MutationBaseline // 基准线
     }
-
-    // 依赖项
-    recognizer *pattern.PatternRecognizer
-    generator *pattern.PatternGenerator
 }
 
 // Mutation 突变
@@ -90,13 +86,10 @@ type BaselineMetric struct {
 }
 
 // NewMutationDetector 创建新的突变检测器
-func NewMutationDetector(
-    recognizer *pattern.PatternRecognizer,
-    generator *pattern.PatternGenerator) *MutationDetector {
+func NewMutationDetector(analyzer common.PatternAnalyzer) *MutationDetector {
     
     md := &MutationDetector{
-        recognizer: recognizer,
-        generator:  generator,
+        patternAnalyzer: analyzer,
     }
 
     // 初始化配置
