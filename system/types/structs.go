@@ -17,6 +17,12 @@ type (
     QuantumState = model.QuantumState
 )
 
+// MetricPoint 表示一个指标数据点
+type MetricPoint struct {
+    Timestamp time.Time            `json:"timestamp"` // 时间戳
+    Values    map[string]float64   `json:"values"`   // 指标值集合
+}
+
 // System 系统结构
 type System struct {
     mu sync.RWMutex
