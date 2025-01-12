@@ -6,14 +6,20 @@ import (
     "github.com/Corphon/daoflow/system/common"
 )
 
-// Mutation 突变类型
-type Mutation struct {
-    common.BasePattern             // 嵌入基础模式结构
-    Source      *MutationSource   // 突变源
-    Changes     []MutationChange  // 变化列表
-    Probability float64           // 发生概率
-    Status      string           // 当前状态
+// MutationType 实现 Mutation 接口
+type MutationType struct {
+    common.BasePattern
+    Source      string
+    Target      string
+    Probability float64
+    Changes     []common.MutationChange
 }
+
+// 实现 Mutation 接口方法
+func (m *MutationType) GetSource() string { return m.Source }
+func (m *MutationType) GetTarget() string { return m.Target }
+func (m *MutationType) GetProbability() float64 { return m.Probability }
+func (m *MutationType) GetChanges() []common.MutationChange { return m.Changes }
 
 // 确保实现了 SharedPattern 接口
 var _ common.SharedPattern = (*Mutation)(nil)
