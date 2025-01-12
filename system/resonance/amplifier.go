@@ -316,7 +316,3 @@ func copyResonanceState(state *ResonanceState) *ResonanceState {
     copy := *state
     return &copy
 }
-
-const (
-    maxHistoryLength = 1000
-)
