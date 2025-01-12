@@ -1,4 +1,4 @@
-//system/resonance/amplifier.go
+//system/meta/resonance/amplifier.go
 
 package resonance
 
