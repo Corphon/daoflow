@@ -334,12 +334,11 @@ func (pm *PatternMatcher) recordMatchEvent(event MatchEvent) {
     pm.state.history = append(pm.state.history, event)
 
     // 限制历史记录长度
-    if len(pm.state.history) > maxHistoryLength {
+    if len(pm.state.history) > types.MaxHistoryLength {
         pm.state.history = pm.state.history[1:]
     }
 }
 
 const (
-    maxHistoryLength = 1000
     matchTimeout    = 1 * time.Hour
 )
