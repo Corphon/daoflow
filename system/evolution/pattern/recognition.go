@@ -6,11 +6,7 @@ import (
     "sync"
     "time"
 
-    "github.com/Corphon/daoflow/meta/field"
-    "github.com/Corphon/daoflow/meta/emergence"
-    "github.com/Corphon/daoflow/meta/resonance"
-    "github.com/Corphon/daoflow/model"
-    "github.com/Corphon/daoflow/system/types"
+    "github.com/Corphon/daoflow/system/common"
 )
 
 // PatternRecognizer 模式识别器
@@ -32,10 +28,7 @@ type PatternRecognizer struct {
         statistics   PatternStatistics             // 统计信息
     }
 
-    // 依赖项
-    detector   *emergence.PatternDetector
-    matcher    *resonance.PatternMatcher
-    amplifier  *resonance.ResonanceAmplifier
+    mutationAnalyzer common.PatternAnalyzer  // 使用接口而不是具体类型
 }
 
 // RecognizedPattern 已识别模式
