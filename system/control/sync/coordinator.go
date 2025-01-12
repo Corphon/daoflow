@@ -322,7 +322,7 @@ func (c *Coordinator) updateMetrics() {
     c.state.metrics.History = append(c.state.metrics.History, point)
 
     // 限制历史记录数量
-    if len(c.state.metrics.History) > maxMetricsHistory {
+    if len(c.state.metrics.History) > types.MaxMetricsHistory {
         c.state.metrics.History = c.state.metrics.History[1:]
     }
 }
@@ -330,7 +330,3 @@ func (c *Coordinator) updateMetrics() {
 func generateSessionID() string {
     return fmt.Sprintf("session_%d", time.Now().UnixNano())
 }
-
-const (
-    maxMetricsHistory = 1000
-)
