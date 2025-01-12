@@ -6,10 +6,7 @@ import (
     "sync"
     "time"
 
-    "github.com/Corphon/daoflow/evolution/pattern"
-    "github.com/Corphon/daoflow/meta/field"
-    "github.com/Corphon/daoflow/model"
-    "github.com/Corphon/daoflow/system/types"
+    "github.com/Corphon/daoflow/system/common"
 )
 
 // MutationHandler 突变处理器
@@ -32,9 +29,12 @@ type MutationHandler struct {
     }
 
     // 依赖项
-    detector  *MutationDetector
-    generator *pattern.PatternGenerator
+    detector common.MutationDetector
+    analyzer common.PatternAnalyzer
 }
+
+// 确保实现接口
+var _ common.MutationHandler = (*MutationHandler)(nil)
 
 // MutationResponse 突变响应
 type MutationResponse struct {
