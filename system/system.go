@@ -3,25 +3,41 @@
 package system
 
 import (
+    // 标准库
+    "context"
+    "errors"
     "fmt"
-    "sync"
-    "time"
+    "os"
     "runtime"
+    "sync"
     "sync/atomic"
+    "time"
 
+    // 项目基础包
+    "github.com/Corphon/daoflow/system/common"
+    "github.com/Corphon/daoflow/system/config"
+    "github.com/Corphon/daoflow/system/resource"
+    "github.com/Corphon/daoflow/system/types"
+    
+    // 元系统包
     "github.com/Corphon/daoflow/system/meta/field"
-    "github.com/Corphon/daoflow/system/meta/emergence"
+    "github.com/Corphon/daoflow/system/meta/emergence" 
     "github.com/Corphon/daoflow/system/meta/resonance"
+    
+    // 演化系统包
     "github.com/Corphon/daoflow/system/evolution/pattern"
     "github.com/Corphon/daoflow/system/evolution/mutation"
     "github.com/Corphon/daoflow/system/evolution/adaptation"
+    
+    // 控制系统包
     "github.com/Corphon/daoflow/system/control/state"
     "github.com/Corphon/daoflow/system/control/flow"
-    "github.com/Corphon/daoflow/system/control/sync"
+    csync "github.com/Corphon/daoflow/system/control/sync" // 重命名避免冲突
+    
+    // 监控系统包
     "github.com/Corphon/daoflow/system/monitor/metrics"
     "github.com/Corphon/daoflow/system/monitor/trace"
     "github.com/Corphon/daoflow/system/monitor/alert"
-    "github.com/Corphon/daoflow/system/types"
 )
 
 // System DaoFlow系统主结构
@@ -81,6 +97,15 @@ type SystemMetrics struct {
     GoroutineCount int                     // 协程数量
     ErrorCount     int64                   // 错误计数
     EventCount     int64                   // 事件计数
+
+    // 新增指标
+    HeapObjects    uint64        // 堆对象数
+    HeapAlloc      uint64        // 堆分配量
+    GCPause        time.Duration // GC暂停时间
+    ThreadCount    int           // 线程数
+    MutexWait      int64        // 互斥锁等待次数
+    NetworkIO      NetworkStats  // 网络IO统计
+    DiskIO        DiskStats     // 磁盘IO统计
 }
 
 // SystemOptions 系统配置选项
@@ -88,6 +113,148 @@ type SystemOptions struct {
     Name       string                      // 系统名称
     Version    string                      // 系统版本
     ConfigPath string                      // 配置路径
+}
+
+type NetworkStats struct {
+    BytesRead    uint64
+    BytesWritten uint64
+    Connections  int
+}
+
+type DiskStats struct {
+    BytesRead    uint64
+    BytesWritten uint64
+    Operations   int64
+}
+
+// 添加系统状态常量
+const (
+    SystemStateInitialized = "initialized"
+    SystemStateRunning     = "running"
+    SystemStateStopping    = "stopping"
+    SystemStateStopped     = "stopped"
+    SystemStateError       = "error"
+)
+
+// 添加资源管理
+type SystemResources struct {
+    CPU     *CPUResource
+    Memory  *MemoryResource
+    Network *NetworkResource
+    Disk    *DiskResource
+}
+
+func (s *System) initializeResources() error {
+    s.resources = &SystemResources{
+        CPU:     NewCPUResource(s.config.CPULimit),
+        Memory:  NewMemoryResource(s.config.MemoryLimit),
+        Network: NewNetworkResource(s.config.NetworkLimit),
+        Disk:    NewDiskResource(s.config.DiskLimit),
+    }
+    return s.resources.Initialize()
+}
+
+func (s *System) monitorResources() {
+    ticker := time.NewTicker(time.Second)
+    for range ticker.C {
+        s.updateResourceMetrics()
+    }
+}
+
+// 添加健康检查
+type HealthCheck struct {
+    Name       string
+    Check      func() error
+    Interval   time.Duration
+    Timeout    time.Duration
+    Required   bool
+}
+
+func (s *System) initializeHealthChecks() {
+    s.healthChecks = []HealthCheck{
+        {
+            Name:     "memory",
+            Check:    s.checkMemoryHealth,
+            Interval: time.Second * 30,
+            Required: true,
+        },
+        {
+            Name:     "subsystems",
+            Check:    s.checkSubsystemsHealth,
+            Interval: time.Minute,
+            Required: true,
+        },
+    }
+}
+
+// 添加动态配置支持
+type SystemConfig struct {
+    Basic    BasicConfig
+    Meta     MetaConfig
+    Evolution EvolutionConfig
+    Control   ControlConfig
+    Monitor   MonitorConfig
+    Resources ResourceConfig
+}
+
+func (s *System) UpdateConfig(newConfig SystemConfig) error {
+    s.mu.Lock()
+    defer s.mu.Unlock()
+
+    if err := s.validateConfig(newConfig); err != nil {
+        return err
+    }
+
+    if err := s.applyConfig(newConfig); err != nil {
+        return err
+    }
+
+    return s.notifyConfigUpdate()
+}
+
+// 添加事件系统
+type SystemEvent struct {
+    Type      string
+    Source    string
+    Timestamp time.Time
+    Data      map[string]interface{}
+}
+
+func (s *System) EmitEvent(evt SystemEvent) {
+    s.eventChan <- evt
+    s.incrementEventCount()
+}
+
+func (s *System) processEvents() {
+    for evt := range s.eventChan {
+        s.handleEvent(evt)
+    }
+}
+
+// 添加状态转换验证
+func (s *System) validateStateTransition(targetState string) error {
+    validTransitions := map[string][]string{
+        SystemStateInitialized: {SystemStateRunning},
+        SystemStateRunning:     {SystemStateStopping, SystemStateError},
+        SystemStateStopping:    {SystemStateStopped, SystemStateError},
+        SystemStateStopped:     {SystemStateInitialized},
+        SystemStateError:       {SystemStateInitialized},
+    }
+
+    if valid, ok := validTransitions[s.state.status]; ok {
+        for _, v := range valid {
+            if v == targetState {
+                return nil
+            }
+        }
+    }
+
+    return types.NewSystemError(
+        types.ErrState,
+        "invalid state transition",
+        nil,
+    ).WithContext("from", s.state.status).
+      WithContext("to", targetState)
 }
 
 // NewSystem 创建新的DaoFlow系统
@@ -134,12 +301,19 @@ func (s *System) Start() error {
     defer s.mu.Unlock()
 
     if s.state.status != "initialized" && s.state.status != "stopped" {
-        return fmt.Errorf("system in invalid state for starting: %s", s.state.status)
+        return types.NewSystemError(
+            types.ErrState,
+            "invalid system state for starting",
+            nil,
+        ).WithContext("current_state", s.state.status)
     }
 
-    // 启动各子系统
     if err := s.startSubSystems(); err != nil {
-        return fmt.Errorf("failed to start subsystems: %v", err)
+        return types.WrapSystemError(
+            err,
+            types.ErrSystem,
+            "failed to start subsystems",
+        )
     }
 
     s.state.status = "running"
@@ -194,8 +368,38 @@ func (s *System) UpdateMetrics() {
     s.state.lastCheck = time.Now()
 }
 
-// 内部辅助方法
+// 添加系统生命周期方法
+func (s *System) Initialize(ctx context.Context) error {
+    if err := s.loadConfig(); err != nil {
+        return err
+    }
+    if err := s.validateConfig(); err != nil {
+        return err
+    }
+    return s.initializeComponents()
+}
 
+func (s *System) Shutdown(ctx context.Context) error {
+    s.mu.Lock()
+    defer s.mu.Unlock()
+
+    if err := s.validateStateTransition(SystemStateStopping); err != nil {
+        return err
+    }
+
+    s.state.status = SystemStateStopping
+    
+    // 优雅关闭
+    if err := s.gracefulShutdown(ctx); err != nil {
+        s.state.status = SystemStateError
+        return err
+    }
+
+    s.state.status = SystemStateStopped
+    return nil
+}
+
+// 内部辅助方法
 func (s *System) initMetaSystems() error {
     // 初始化场系统
     fieldSys, err := field.NewSystem()
