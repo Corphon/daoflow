@@ -13,6 +13,15 @@ import (
     "github.com/Corphon/daoflow/system/types"
 )
 
+type CouplingTrends struct {
+    StrengthTrend float64
+    PhaseTrend    float64
+    EnergyTrend   float64
+    Stability     float64
+    Prediction    PredictedState
+    History       []types.MetricPoint
+}
+
 // ResonanceAmplifier 共振放大器
 type ResonanceAmplifier struct {
     mu sync.RWMutex
