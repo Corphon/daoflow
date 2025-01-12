@@ -10,6 +10,14 @@ import (
     "github.com/Corphon/daoflow/system/types"
 )
 
+type GenerationMetrics struct {
+    TotalGenerated  int
+    SuccessRate     float64
+    AverageScore    float64
+    ComplexityDist  map[float64]int
+    Evolution       []types.MetricPoint
+}
+
 // Collector 指标收集器
 type Collector struct {
     mu sync.RWMutex
