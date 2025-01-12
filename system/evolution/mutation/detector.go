@@ -282,7 +282,3 @@ func (md *MutationDetector) checkAnomalies(
 func generateMutationID() string {
     return fmt.Sprintf("mut_%d", time.Now().UnixNano())
 }
-
-const (
-    maxObservations = 1000
-)
