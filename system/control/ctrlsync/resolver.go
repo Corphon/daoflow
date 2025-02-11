@@ -1,6 +1,6 @@
 //system/control/ctrlsync/resolver.go
 
-package sync
+package ctrlsync
 
 import (
 	"context"
