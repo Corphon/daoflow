@@ -1,6 +1,6 @@
 //system/control/ctrlsync/synchronizer.go
 
-package sync
+package ctrlsync
 
 import (
 	"bytes"
