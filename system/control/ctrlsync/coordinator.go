@@ -1,6 +1,6 @@
 //system/control/ctrlsync/coordinator.go
 
-package sync
+package ctrlsync
 
 import (
 	"fmt"
