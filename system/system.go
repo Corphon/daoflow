@@ -1,813 +1,921 @@
-//system/system.go
+// system/system.go
 
 package system
 
 import (
-    // 标准库
-    "context"
-    "errors"
-    "fmt"
-    "os"
-    "runtime"
-    "sync"
-    "sync/atomic"
-    "time"
+	"context"
+	"fmt"
+	"math"
+	"sync"
+	"time"
 
-    // 项目基础包
-    "github.com/Corphon/daoflow/system/common"
-    "github.com/Corphon/daoflow/system/config"
-    "github.com/Corphon/daoflow/system/resource"
-    "github.com/Corphon/daoflow/system/types"
-    
-    // 元系统包
-    "github.com/Corphon/daoflow/system/meta/field"
-    "github.com/Corphon/daoflow/system/meta/emergence" 
-    "github.com/Corphon/daoflow/system/meta/resonance"
-    
-    // 演化系统包
-    "github.com/Corphon/daoflow/system/evolution/pattern"
-    "github.com/Corphon/daoflow/system/evolution/mutation"
-    "github.com/Corphon/daoflow/system/evolution/adaptation"
-    
-    // 控制系统包
-    "github.com/Corphon/daoflow/system/control/state"
-    "github.com/Corphon/daoflow/system/control/flow"
-    csync "github.com/Corphon/daoflow/system/control/sync" // 重命名避免冲突
-    
-    // 监控系统包
-    "github.com/Corphon/daoflow/system/monitor/metrics"
-    "github.com/Corphon/daoflow/system/monitor/trace"
-    "github.com/Corphon/daoflow/system/monitor/alert"
+	"github.com/Corphon/daoflow/core"
+	"github.com/Corphon/daoflow/model"
+	"github.com/Corphon/daoflow/system/common"
+	"github.com/Corphon/daoflow/system/control"
+	"github.com/Corphon/daoflow/system/evolution"
+	"github.com/Corphon/daoflow/system/meta"
+	"github.com/Corphon/daoflow/system/monitor"
+	"github.com/Corphon/daoflow/system/types"
 )
 
-// System DaoFlow系统主结构
+// System represents the main system controller that coordinates all components
 type System struct {
-    mu sync.RWMutex
+	mu sync.RWMutex
 
-    // 系统配置
-    config struct {
-        Name          string                // 系统名称
-        Version       string                // 系统版本
-        StartTime     time.Time            // 启动时间
-        ConfigPath    string                // 配置路径
-    }
+	// Core components
+	core *core.Engine
 
-    // 元系统组件
-    meta struct {
-        fieldSystem      *field.System      // 场系统
-        emergenceSystem  *emergence.System  // 涌现系统
-        resonanceSystem  *resonance.System  // 共振系统
-    }
+	// Model components
+	models map[string]model.Model
 
-    // 演化系统组件
-    evolution struct {
-        patternSystem    *pattern.System    // 模式系统
-        mutationSystem   *mutation.System   // 突变系统
-        adaptationSystem *adaptation.System // 适应系统
-    }
+	// System subsystems
+	common    *control.Manager   // Common utilities and shared resources
+	control   *control.Manager   // System control and management
+	evolution *evolution.Manager // Evolution and learning capabilities
+	meta      *meta.Manager      // Metadata and system information
+	monitor   *monitor.Manager   // System monitoring and metrics
 
-    // 控制系统组件
-    control struct {
-        stateManager     *state.Manager     // 状态管理器
-        flowController   *flow.Controller   // 流控制器
-        syncController   *sync.Controller   // 同步控制器
-    }
+	// System state management
+	state struct {
+		status    string              // 系统状态
+		startTime time.Time           // 启动时间
+		errors    []error             // 错误记录
+		metrics   types.SystemMetrics // 系统指标
+		events    []types.SystemEvent // 事件历史
+	}
 
-    // 监控系统组件
-    monitor struct {
-        metricsSystem    *metrics.System    // 指标系统
-        traceSystem      *trace.System      // 追踪系统
-        alertSystem      *alert.System      // 告警系统
-    }
+	// Event handling
+	events struct {
+		handlers  map[string][]types.EventHandler // 事件处理器
+		queue     chan types.SystemEvent          // 事件队列
+		processor *types.EventProcessor           // 事件处理器
+	}
 
-    // 系统状态
-    state struct {
-        status        string                // 系统状态
-        health        float64               // 健康度
-        lastCheck     time.Time            // 最后检查
-        metrics       SystemMetrics         // 系统指标
-    }
+	// Lifecycle management
+	isRunning bool
+	ctx       context.Context
+	cancel    context.CancelFunc
+
+	// Configuration
+	config *Config
 }
 
-// SystemMetrics 系统指标
-type SystemMetrics struct {
-    Uptime         time.Duration           // 运行时间
-    MemoryUsage    uint64                  // 内存使用
-    CPUUsage       float64                 // CPU使用率
-    GoroutineCount int                     // 协程数量
-    ErrorCount     int64                   // 错误计数
-    EventCount     int64                   // 事件计数
-
-    // 新增指标
-    HeapObjects    uint64        // 堆对象数
-    HeapAlloc      uint64        // 堆分配量
-    GCPause        time.Duration // GC暂停时间
-    ThreadCount    int           // 线程数
-    MutexWait      int64        // 互斥锁等待次数
-    NetworkIO      NetworkStats  // 网络IO统计
-    DiskIO        DiskStats     // 磁盘IO统计
+// Config holds the system configuration
+type Config struct {
+	CoreConfig      *core.Config
+	ModelConfig     *model.Config
+	CommonConfig    *common.Config
+	ControlConfig   *control.Config
+	EvolutionConfig *evolution.Config
+	MetaConfig      *meta.Config
+	MonitorConfig   *monitor.Config
 }
 
-// SystemOptions 系统配置选项
-type SystemOptions struct {
-    Name       string                      // 系统名称
-    Version    string                      // 系统版本
-    ConfigPath string                      // 配置路径
+// New creates a new System instance
+func New(cfg *Config) (*System, error) {
+	if cfg == nil {
+		cfg = defaultConfig()
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+
+	sys := &System{
+		models: make(map[string]model.Model),
+		ctx:    ctx,
+		cancel: cancel,
+		config: cfg,
+	}
+
+	// 初始化事件系统
+	sys.events.handlers = make(map[string][]types.EventHandler)
+	sys.events.queue = make(chan types.SystemEvent, 1000)
+	sys.events.processor = types.NewEventProcessor()
+
+	// 初始化状态
+	sys.state.status = "initialized"
+	sys.state.startTime = time.Now()
+	sys.state.errors = make([]error, 0)
+	sys.state.events = make([]types.SystemEvent, 0)
+	sys.state.metrics = types.SystemMetrics{
+		StartTime: time.Now(),
+	}
+
+	// Initialize core engine
+	engine, err := core.NewEngine(cfg.CoreConfig)
+	if err != nil {
+		cancel()
+		return nil, fmt.Errorf("failed to initialize core engine: %w", err)
+	}
+	sys.core = engine
+
+	// Initialize subsystems
+	if err := sys.initializeSubsystems(); err != nil {
+		cancel()
+		return nil, fmt.Errorf("failed to initialize subsystems: %w", err)
+	}
+
+	// 启动事件处理
+	go sys.processEvents()
+
+	return sys, nil
 }
 
-type NetworkStats struct {
-    BytesRead    uint64
-    BytesWritten uint64
-    Connections  int
+// defaultConfig returns default system configuration
+func defaultConfig() *Config {
+	return &Config{
+		CoreConfig:      core.DefaultConfig(),
+		ModelConfig:     model.DefaultConfig(),
+		CommonConfig:    common.DefaultConfig(),
+		ControlConfig:   control.DefaultConfig(),
+		EvolutionConfig: evolution.DefaultConfig(),
+		MetaConfig:      meta.DefaultConfig(),
+		MonitorConfig:   monitor.DefaultConfig(),
+	}
 }
 
-type DiskStats struct {
-    BytesRead    uint64
-    BytesWritten uint64
-    Operations   int64
+// initializeSubsystems initializes all system subsystems
+func (s *System) initializeSubsystems() error {
+	var err error
+
+	// Initialize common manager
+	s.common, err = common.NewManager(s.config.CommonConfig)
+	if err != nil {
+		return err
+	}
+
+	// Initialize control manager
+	s.control, err = control.NewManager(s.config.ControlConfig)
+	if err != nil {
+		return err
+	}
+
+	// Initialize evolution manager
+	s.evolution, err = evolution.NewManager(s.config.EvolutionConfig)
+	if err != nil {
+		return err
+	}
+
+	// Initialize meta manager
+	s.meta, err = meta.NewManager(s.config.MetaConfig)
+	if err != nil {
+		return err
+	}
+
+	// Initialize monitor manager
+	s.monitor, err = monitor.NewManager(s.config.MonitorConfig)
+	if err != nil {
+		return err
+	}
+
+	return nil
 }
 
-// 添加系统状态常量
-const (
-    SystemStateInitialized = "initialized"
-    SystemStateRunning     = "running"
-    SystemStateStopping    = "stopping"
-    SystemStateStopped     = "stopped"
-    SystemStateError       = "error"
-)
-
-// 添加资源管理
-type SystemResources struct {
-    CPU     *CPUResource
-    Memory  *MemoryResource
-    Network *NetworkResource
-    Disk    *DiskResource
-}
-
-func (s *System) initializeResources() error {
-    s.resources = &SystemResources{
-        CPU:     NewCPUResource(s.config.CPULimit),
-        Memory:  NewMemoryResource(s.config.MemoryLimit),
-        Network: NewNetworkResource(s.config.NetworkLimit),
-        Disk:    NewDiskResource(s.config.DiskLimit),
-    }
-    return s.resources.Initialize()
-}
-
-func (s *System) monitorResources() {
-    ticker := time.NewTicker(time.Second)
-    for range ticker.C {
-        s.updateResourceMetrics()
-    }
-}
-
-// 添加健康检查
-type HealthCheck struct {
-    Name       string
-    Check      func() error
-    Interval   time.Duration
-    Timeout    time.Duration
-    Required   bool
-}
-
-func (s *System) initializeHealthChecks() {
-    s.healthChecks = []HealthCheck{
-        {
-            Name:     "memory",
-            Check:    s.checkMemoryHealth,
-            Interval: time.Second * 30,
-            Required: true,
-        },
-        {
-            Name:     "subsystems",
-            Check:    s.checkSubsystemsHealth,
-            Interval: time.Minute,
-            Required: true,
-        },
-    }
-}
-
-// 添加动态配置支持
-type SystemConfig struct {
-    Basic    BasicConfig
-    Meta     MetaConfig
-    Evolution EvolutionConfig
-    Control   ControlConfig
-    Monitor   MonitorConfig
-    Resources ResourceConfig
-}
-
-func (s *System) UpdateConfig(newConfig SystemConfig) error {
-    s.mu.Lock()
-    defer s.mu.Unlock()
-
-    if err := s.validateConfig(newConfig); err != nil {
-        return err
-    }
-
-    if err := s.applyConfig(newConfig); err != nil {
-        return err
-    }
-
-    return s.notifyConfigUpdate()
-}
-
-// 添加事件系统
-type SystemEvent struct {
-    Type      string
-    Source    string
-    Timestamp time.Time
-    Data      map[string]interface{}
-}
-
-func (s *System) EmitEvent(evt SystemEvent) {
-    s.eventChan <- evt
-    s.incrementEventCount()
-}
-
-func (s *System) processEvents() {
-    for evt := range s.eventChan {
-        s.handleEvent(evt)
-    }
-}
-
-// 添加状态转换验证
-func (s *System) validateStateTransition(targetState string) error {
-    validTransitions := map[string][]string{
-        SystemStateInitialized: {SystemStateRunning},
-        SystemStateRunning:     {SystemStateStopping, SystemStateError},
-        SystemStateStopping:    {SystemStateStopped, SystemStateError},
-        SystemStateStopped:     {SystemStateInitialized},
-        SystemStateError:       {SystemStateInitialized},
-    }
-
-    if valid, ok := validTransitions[s.state.status]; ok {
-        for _, v := range valid {
-            if v == targetState {
-                return nil
-            }
-        }
-    }
-
-    return types.NewSystemError(
-        types.ErrState,
-        "invalid state transition",
-        nil,
-    ).WithContext("from", s.state.status).
-      WithContext("to", targetState)
-}
-
-// NewSystem 创建新的DaoFlow系统
-func NewSystem(opts SystemOptions) (*System, error) {
-    s := &System{}
-
-    // 初始化配置
-    s.config.Name = opts.Name
-    s.config.Version = opts.Version
-    s.config.StartTime = time.Now()
-    s.config.ConfigPath = opts.ConfigPath
-
-    // 初始化元系统
-    if err := s.initMetaSystems(); err != nil {
-        return nil, fmt.Errorf("failed to initialize meta systems: %v", err)
-    }
-
-    // 初始化演化系统
-    if err := s.initEvolutionSystems(); err != nil {
-        return nil, fmt.Errorf("failed to initialize evolution systems: %v", err)
-    }
-
-    // 初始化控制系统
-    if err := s.initControlSystems(); err != nil {
-        return nil, fmt.Errorf("failed to initialize control systems: %v", err)
-    }
-
-    // 初始化监控系统
-    if err := s.initMonitorSystems(); err != nil {
-        return nil, fmt.Errorf("failed to initialize monitor systems: %v", err)
-    }
-
-    // 初始化系统状态
-    s.state.status = "initialized"
-    s.state.health = 1.0
-    s.state.lastCheck = time.Now()
-
-    return s, nil
-}
-
-// Start 启动系统
+// Start initializes and starts all system components
 func (s *System) Start() error {
-    s.mu.Lock()
-    defer s.mu.Unlock()
+	s.mu.Lock()
+	defer s.mu.Unlock()
 
-    if s.state.status != "initialized" && s.state.status != "stopped" {
-        return types.NewSystemError(
-            types.ErrState,
-            "invalid system state for starting",
-            nil,
-        ).WithContext("current_state", s.state.status)
-    }
+	if s.isRunning {
+		return nil
+	}
 
-    if err := s.startSubSystems(); err != nil {
-        return types.WrapSystemError(
-            err,
-            types.ErrSystem,
-            "failed to start subsystems",
-        )
-    }
+	// 更新系统状态
+	s.state.status = "starting"
+	startTime := time.Now()
 
-    s.state.status = "running"
-    return nil
+	// 启动核心引擎
+	if err := s.core.Start(s.ctx); err != nil {
+		s.state.status = "failed"
+		return fmt.Errorf("failed to start core engine: %w", err)
+	}
+
+	// 启动子系统,按依赖顺序启动
+	if err := s.startSubsystems(); err != nil {
+		s.core.Stop()
+		s.state.status = "failed"
+		return fmt.Errorf("failed to start subsystems: %w", err)
+	}
+
+	// 启动所有模型
+	for name, m := range s.models {
+		if err := m.Start(s.ctx); err != nil {
+			s.stopSubsystems()
+			s.core.Stop()
+			s.state.status = "failed"
+			return fmt.Errorf("failed to start model %s: %w", name, err)
+		}
+	}
+
+	// 更新系统状态
+	s.isRunning = true
+	s.state.status = "running"
+	s.state.startTime = startTime
+
+	// 发送系统启动事件
+	s.HandleEvent(types.SystemEvent{
+		Type:      "system.started",
+		Timestamp: time.Now(),
+		Data: map[string]interface{}{
+			"startup_time": time.Since(startTime).String(),
+		},
+	})
+
+	return nil
 }
 
-// Stop 停止系统
+// startSubsystems starts all subsystems in dependency order
+func (s *System) startSubsystems() error {
+	// 1. 启动公共子系统
+	if err := s.common.Start(s.ctx); err != nil {
+		return fmt.Errorf("failed to start common subsystem: %w", err)
+	}
+
+	// 2. 启动控制子系统
+	if err := s.control.Start(s.ctx); err != nil {
+		s.common.Stop()
+		return fmt.Errorf("failed to start control subsystem: %w", err)
+	}
+
+	// 3. 启动演化子系统
+	if err := s.evolution.Start(s.ctx); err != nil {
+		s.control.Stop()
+		s.common.Stop()
+		return fmt.Errorf("failed to start evolution subsystem: %w", err)
+	}
+
+	// 4. 启动元数据子系统
+	if err := s.meta.Start(s.ctx); err != nil {
+		s.evolution.Stop()
+		s.control.Stop()
+		s.common.Stop()
+		return fmt.Errorf("failed to start meta subsystem: %w", err)
+	}
+
+	// 5. 启动监控子系统
+	if err := s.monitor.Start(s.ctx); err != nil {
+		s.meta.Stop()
+		s.evolution.Stop()
+		s.control.Stop()
+		s.common.Stop()
+		return fmt.Errorf("failed to start monitor subsystem: %w", err)
+	}
+
+	return nil
+}
+
+// Stop gracefully shuts down all system components
 func (s *System) Stop() error {
-    s.mu.Lock()
-    defer s.mu.Unlock()
+	s.mu.Lock()
+	defer s.mu.Unlock()
 
-    if s.state.status != "running" {
-        return fmt.Errorf("system not in running state: %s", s.state.status)
-    }
+	if !s.isRunning {
+		return nil
+	}
 
-    // 停止各子系统
-    if err := s.stopSubSystems(); err != nil {
-        return fmt.Errorf("failed to stop subsystems: %v", err)
-    }
+	// 更新系统状态
+	s.state.status = "stopping"
 
-    s.state.status = "stopped"
-    return nil
+	// 设置关闭超时
+	ctx, cancel := context.WithTimeout(s.ctx, 30*time.Second)
+	defer cancel()
+
+	// 发送系统关闭事件
+	s.HandleEvent(types.SystemEvent{
+		Type:      "system.stopping",
+		Timestamp: time.Now(),
+	})
+
+	// 等待所有事件处理完成
+	close(s.events.queue)
+	s.events.processor.Wait()
+
+	// 停止所有模型
+	for name, m := range s.models {
+		if err := m.Stop(); err != nil {
+			s.recordError(fmt.Errorf("failed to stop model %s: %w", name, err))
+		}
+	}
+
+	// 停止所有子系统
+	if err := s.stopSubsystems(); err != nil {
+		s.recordError(fmt.Errorf("failed to stop subsystems: %w", err))
+	}
+
+	// 停止核心引擎
+	if err := s.core.Stop(); err != nil {
+		s.recordError(fmt.Errorf("failed to stop core engine: %w", err))
+	}
+
+	// 取消上下文
+	s.cancel()
+
+	// 等待所有组件完全停止或超时
+	select {
+	case <-ctx.Done():
+		if ctx.Err() == context.DeadlineExceeded {
+			s.recordError(fmt.Errorf("system shutdown timed out"))
+		}
+	case <-s.waitForComponents():
+		// 所有组件已停止
+	}
+
+	s.isRunning = false
+	s.state.status = "stopped"
+
+	return nil
+}
+
+// waitForComponents waits for all components to stop
+func (s *System) waitForComponents() chan struct{} {
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+
+		// 等待监控系统停止
+		s.monitor.Wait()
+
+		// 等待元系统停止
+		s.meta.Wait()
+
+		// 等待演化系统停止
+		s.evolution.Wait()
+
+		// 等待控制系统停止
+		s.control.Wait()
+
+		// 等待公共系统停止
+		s.common.Wait()
+	}()
+	return done
+}
+
+// stopSubsystems stops all subsystems in reverse order
+func (s *System) stopSubsystems() error {
+	if err := s.monitor.Stop(); err != nil {
+		return err
+	}
+
+	if err := s.meta.Stop(); err != nil {
+		return err
+	}
+
+	if err := s.evolution.Stop(); err != nil {
+		return err
+	}
+
+	if err := s.control.Stop(); err != nil {
+		return err
+	}
+
+	if err := s.common.Stop(); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+// Reset resets the system to its initial state
+func (s *System) Reset() error {
+	if s.isRunning {
+		if err := s.Stop(); err != nil {
+			return fmt.Errorf("failed to stop system: %w", err)
+		}
+	}
+
+	// 重置所有状态
+	s.state.status = "resetting"
+	s.state.errors = make([]error, 0)
+	s.state.events = make([]types.SystemEvent, 0)
+	s.state.metrics = types.SystemMetrics{
+		StartTime: time.Now(),
+	}
+
+	// 重置事件系统
+	s.events.handlers = make(map[string][]types.EventHandler)
+	s.events.queue = make(chan types.SystemEvent, 1000)
+	s.events.processor = types.NewEventProcessor()
+
+	// 重置上下文
+	s.ctx, s.cancel = context.WithCancel(context.Background())
+
+	// 重新初始化所有组件
+	if err := s.initializeSubsystems(); err != nil {
+		return fmt.Errorf("failed to reinitialize subsystems: %w", err)
+	}
+
+	s.state.status = "reset"
+	return nil
+}
+
+// Subsystem access methods
+
+// Common returns the common utilities manager
+func (s *System) Common() *common.Manager {
+	return s.common
+}
+
+// Control returns the system control manager
+func (s *System) Control() *control.Manager {
+	return s.control
+}
+
+// Evolution returns the evolution manager
+func (s *System) Evolution() *evolution.Manager {
+	return s.evolution
+}
+
+// Meta returns the metadata manager
+func (s *System) Meta() *meta.Manager {
+	return s.meta
+}
+
+// Monitor returns the system monitor manager
+func (s *System) Monitor() *monitor.Manager {
+	return s.monitor
+}
+
+// Model management methods
+
+// RegisterModel adds a new model to the system
+func (s *System) RegisterModel(name string, m model.Model) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	if _, exists := s.models[name]; exists {
+		return types.ErrModelAlreadyExists
+	}
+
+	s.models[name] = m
+	return nil
+}
+
+// RegisterModels registers multiple models at once
+func (s *System) RegisterModels(models map[string]model.Model) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	// 预检查
+	for name := range models {
+		if _, exists := s.models[name]; exists {
+			return fmt.Errorf("model %s already exists", name)
+		}
+	}
+
+	// 批量注册
+	for name, m := range models {
+		s.models[name] = m
+	}
+
+	// 如果系统已运行,启动新注册的模型
+	if s.isRunning {
+		for name, m := range models {
+			if err := m.Start(s.ctx); err != nil {
+				return fmt.Errorf("failed to start model %s: %w", name, err)
+			}
+		}
+	}
+
+	return nil
+}
+
+// UnregisterModel safely removes a model
+func (s *System) UnregisterModel(name string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	model, exists := s.models[name]
+	if !exists {
+		return fmt.Errorf("model %s not found", name)
+	}
+
+	// 如果模型正在运行,先停止它
+	if s.isRunning {
+		if err := model.Stop(); err != nil {
+			return fmt.Errorf("failed to stop model %s: %w", name, err)
+		}
+	}
+
+	// 移除模型
+	delete(s.models, name)
+
+	return nil
+}
+
+// GetModel retrieves a registered model by name
+func (s *System) GetModel(name string) (model.Model, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	m, exists := s.models[name]
+	if !exists {
+		return nil, types.ErrModelNotFound
+	}
+
+	return m, nil
+}
+
+// Core returns the core engine instance
+func (s *System) Core() *core.Engine {
+	return s.core
+}
+
+// IsRunning returns the current system state
+func (s *System) IsRunning() bool {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.isRunning
+}
+
+// Context returns the system context
+func (s *System) Context() context.Context {
+	return s.ctx
+}
+
+// HandleEvent 处理系统事件
+func (s *System) HandleEvent(event types.SystemEvent) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	// 检查系统状态
+	if !s.isRunning {
+		return types.NewSystemError(types.ErrState, "system not running", nil)
+	}
+
+	// 添加到事件队列
+	select {
+	case s.events.queue <- event:
+		// 成功添加到队列
+	default:
+		return types.NewSystemError(types.ErrQueue, "event queue full", nil)
+	}
+
+	// 记录事件
+	s.state.events = append(s.state.events, event)
+	if len(s.state.events) > types.MaxEventHistory {
+		s.state.events = s.state.events[1:]
+	}
+
+	return nil
+}
+
+// Subscribe 订阅事件
+func (s *System) Subscribe(eventType string, handler types.EventHandler) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	if handler == nil {
+		return types.NewSystemError(types.ErrValidation, "nil handler", nil)
+	}
+
+	s.events.handlers[eventType] = append(s.events.handlers[eventType], handler)
+	return nil
+}
+
+// Unsubscribe 取消事件订阅
+func (s *System) Unsubscribe(eventType string, handler types.EventHandler) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	handlers := s.events.handlers[eventType]
+	for i, h := range handlers {
+		if h == handler {
+			s.events.handlers[eventType] = append(handlers[:i], handlers[i+1:]...)
+			return nil
+		}
+	}
+
+	return types.NewSystemError(types.ErrNotFound, "handler not found", nil)
+}
+
+// processEvents 处理事件队列
+func (s *System) processEvents() {
+	for {
+		select {
+		case <-s.ctx.Done():
+			return
+		case event := <-s.events.queue:
+			s.dispatchEvent(event)
+		}
+	}
+}
+
+// dispatchEvent 分发事件到处理器
+func (s *System) dispatchEvent(event types.SystemEvent) {
+	s.mu.RLock()
+	handlers := s.events.handlers[event.Type]
+	s.mu.RUnlock()
+
+	for _, handler := range handlers {
+		go func(h types.EventHandler) {
+			if err := h.Handle(event); err != nil {
+				s.recordError(err)
+			}
+		}(handler)
+	}
+}
+
+// recordError records a system error
+func (s *System) recordError(err error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	s.state.errors = append(s.state.errors, err)
+	if len(s.state.errors) > types.MaxErrorHistory {
+		s.state.errors = s.state.errors[1:]
+	}
+
+	// 触发错误事件
+	s.HandleEvent(types.SystemEvent{
+		Type:      "system.error",
+		Timestamp: time.Now(),
+		Data: map[string]interface{}{
+			"error": err.Error(),
+		},
+	})
+}
+
+// updateMetrics 更新系统指标
+func (s *System) updateMetrics() {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	now := time.Now()
+	uptime := now.Sub(s.state.startTime)
+
+	// 更新基本指标
+	s.state.metrics.Uptime = uptime
+	s.state.metrics.LastUpdate = now
+	s.state.metrics.Status = s.state.status
+	s.state.metrics.ErrorCount = len(s.state.errors)
+	s.state.metrics.EventCount = len(s.state.events)
+
+	// 收集子系统指标
+	s.state.metrics.Subsystems = map[string]types.SubsystemMetrics{
+		"core": {
+			Status:     s.core.Status(),
+			Metrics:    s.core.GetMetrics(),
+			LastUpdate: now,
+		},
+		"control": {
+			Status:     s.control.Status(),
+			Metrics:    s.control.GetMetrics(),
+			LastUpdate: now,
+		},
+		"evolution": {
+			Status:     s.evolution.Status(),
+			Metrics:    s.evolution.GetMetrics(),
+			LastUpdate: now,
+		},
+		"meta": {
+			Status:     s.meta.Status(),
+			Metrics:    s.meta.GetMetrics(),
+			LastUpdate: now,
+		},
+		"monitor": {
+			Status:     s.monitor.Status(),
+			Metrics:    s.monitor.GetMetrics(),
+			LastUpdate: now,
+		},
+	}
+
+	// 计算系统健康度
+	s.state.metrics.Health = s.calculateSystemHealth()
+}
+
+// calculateSystemHealth 计算系统整体健康度
+func (s *System) calculateSystemHealth() float64 {
+	// 基础分值
+	baseScore := 1.0
+
+	// 根据错误数量扣分
+	errorPenalty := math.Min(float64(len(s.state.errors))*0.1, 0.5)
+	baseScore -= errorPenalty
+
+	// 检查子系统状态
+	subsystemScores := make([]float64, 0)
+	for _, metrics := range s.state.metrics.Subsystems {
+		if health, ok := metrics.Metrics["health"].(float64); ok {
+			subsystemScores = append(subsystemScores, health)
+		}
+	}
+
+	// 计算子系统平均健康度
+	avgSubsystemHealth := 0.0
+	if len(subsystemScores) > 0 {
+		total := 0.0
+		for _, score := range subsystemScores {
+			total += score
+		}
+		avgSubsystemHealth = total / float64(len(subsystemScores))
+	}
+
+	// 综合评分
+	return math.Max(0, math.Min(1, baseScore*0.4+avgSubsystemHealth*0.6))
+}
+
+// GetMetrics 获取系统指标
+func (s *System) GetMetrics() types.SystemMetrics {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	// 更新指标
+	s.updateMetrics()
+
+	// 返回指标副本
+	metrics := s.state.metrics
+	return metrics
 }
 
 // GetStatus 获取系统状态
-func (s *System) GetStatus() types.SystemStatus {
-    s.mu.RLock()
-    defer s.mu.RUnlock()
-
-    return types.SystemStatus{
-        Status:    s.state.status,
-        Health:    s.state.health,
-        LastCheck: s.state.lastCheck,
-        Metrics:   s.state.metrics,
-    }
+func (s *System) GetStatus() string {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.state.status
 }
 
-// UpdateMetrics 更新系统指标
-func (s *System) UpdateMetrics() {
-    s.mu.Lock()
-    defer s.mu.Unlock()
+// GetErrors 获取系统错误
+func (s *System) GetErrors() []error {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
 
-    s.state.metrics = SystemMetrics{
-        Uptime:         time.Since(s.config.StartTime),
-        MemoryUsage:    s.calculateMemoryUsage(),
-        CPUUsage:       s.calculateCPUUsage(),
-        GoroutineCount: s.getGoroutineCount(),
-        ErrorCount:     s.getErrorCount(),
-        EventCount:     s.getEventCount(),
-    }
-
-    s.state.lastCheck = time.Now()
+	// 返回错误副本
+	errors := make([]error, len(s.state.errors))
+	copy(errors, s.state.errors)
+	return errors
 }
 
-// 添加系统生命周期方法
-func (s *System) Initialize(ctx context.Context) error {
-    if err := s.loadConfig(); err != nil {
-        return err
-    }
-    if err := s.validateConfig(); err != nil {
-        return err
-    }
-    return s.initializeComponents()
+// GetEvents 获取系统事件
+func (s *System) GetEvents() []types.SystemEvent {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	// 返回事件副本
+	events := make([]types.SystemEvent, len(s.state.events))
+	copy(events, s.state.events)
+	return events
 }
 
-func (s *System) Shutdown(ctx context.Context) error {
-    s.mu.Lock()
-    defer s.mu.Unlock()
+// GetSubsystemStatus 获取子系统状态
+func (s *System) GetSubsystemStatus() map[string]string {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
 
-    if err := s.validateStateTransition(SystemStateStopping); err != nil {
-        return err
-    }
-
-    s.state.status = SystemStateStopping
-    
-    // 优雅关闭
-    if err := s.gracefulShutdown(ctx); err != nil {
-        s.state.status = SystemStateError
-        return err
-    }
-
-    s.state.status = SystemStateStopped
-    return nil
+	return map[string]string{
+		"core":      s.core.Status(),
+		"common":    s.common.Status(),
+		"control":   s.control.Status(),
+		"evolution": s.evolution.Status(),
+		"meta":      s.meta.Status(),
+		"monitor":   s.monitor.Status(),
+	}
 }
 
-// 内部辅助方法
-func (s *System) initMetaSystems() error {
-    // 初始化场系统
-    fieldSys, err := field.NewSystem()
-    if err != nil {
-        return err
-    }
-    s.meta.fieldSystem = fieldSys
-
-    // 初始化涌现系统
-    emergenceSys, err := emergence.NewSystem()
-    if err != nil {
-        return err
-    }
-    s.meta.emergenceSystem = emergenceSys
-
-    // 初始化共振系统
-    resonanceSys, err := resonance.NewSystem()
-    if err != nil {
-        return err
-    }
-    s.meta.resonanceSystem = resonanceSys
-
-    return nil
+// GetDependencies 获取系统依赖关系
+func (s *System) GetDependencies() map[string][]string {
+	return map[string][]string{
+		"core":      {}, // core 是基础层,无依赖
+		"common":    {"core"},
+		"control":   {"core", "common"},
+		"evolution": {"core", "common", "control"},
+		"meta":      {"core", "common", "control"},
+		"monitor":   {"core", "common"},
+	}
 }
 
-func (s *System) initEvolutionSystems() error {
-    // 初始化模式系统
-    patternSys, err := pattern.NewSystem()
-    if err != nil {
-        return err
-    }
-    s.evolution.patternSystem = patternSys
+// ValidateDependencies 验证依赖关系
+func (s *System) ValidateDependencies() error {
+	deps := s.GetDependencies()
 
-    // 初始化突变系统
-    mutationSys, err := mutation.NewSystem()
-    if err != nil {
-        return err
-    }
-    s.evolution.mutationSystem = mutationSys
+	// 验证每个组件的依赖
+	for component, dependencies := range deps {
+		for _, dep := range dependencies {
+			if !s.isComponentRunning(dep) {
+				return fmt.Errorf("dependency %s not running for component %s",
+					dep, component)
+			}
+		}
+	}
 
-    // 初始化适应系统
-    adaptationSys, err := adaptation.NewSystem()
-    if err != nil {
-        return err
-    }
-    s.evolution.adaptationSystem = adaptationSys
-
-    return nil
+	return nil
 }
 
-func (s *System) initControlSystems() error {
-    // 初始化状态管理器
-    stateManager, err := state.NewManager()
-    if err != nil {
-        return err
-    }
-    s.control.stateManager = stateManager
+// isComponentRunning 检查组件是否运行中
+func (s *System) isComponentRunning(name string) bool {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
 
-    // 初始化流控制器
-    flowController, err := flow.NewController()
-    if err != nil {
-        return err
-    }
-    s.control.flowController = flowController
-
-    // 初始化同步控制器
-    syncController, err := sync.NewController()
-    if err != nil {
-        return err
-    }
-    s.control.syncController = syncController
-
-    return nil
+	switch name {
+	case "core":
+		return s.core != nil && s.core.Status() == "running"
+	case "common":
+		return s.common != nil && s.common.Status() == "running"
+	case "control":
+		return s.control != nil && s.control.Status() == "running"
+	case "evolution":
+		return s.evolution != nil && s.evolution.Status() == "running"
+	case "meta":
+		return s.meta != nil && s.meta.Status() == "running"
+	case "monitor":
+		return s.monitor != nil && s.monitor.Status() == "running"
+	default:
+		return false
+	}
 }
 
-func (s *System) initMonitorSystems() error {
-    // 初始化指标系统
-    metricsSys, err := metrics.NewSystem()
-    if err != nil {
-        return err
-    }
-    s.monitor.metricsSystem = metricsSys
+// injectDependencies 注入组件依赖
+func (s *System) injectDependencies() error {
+	// 注入 Control 依赖
+	if err := s.control.InjectDependencies(
+		s.core,
+		s.common,
+	); err != nil {
+		return fmt.Errorf("failed to inject control dependencies: %w", err)
+	}
 
-    // 初始化追踪系统
-    traceSys, err := trace.NewSystem()
-    if err != nil {
-        return err
-    }
-    s.monitor.traceSystem = traceSys
+	// 注入 Evolution 依赖
+	if err := s.evolution.InjectDependencies(
+		s.core,
+		s.common,
+		s.control,
+	); err != nil {
+		return fmt.Errorf("failed to inject evolution dependencies: %w", err)
+	}
 
-    // 初始化告警系统
-    alertSys, err := alert.NewSystem()
-    if err != nil {
-        return err
-    }
-    s.monitor.alertSystem = alertSys
+	// 注入 Meta 依赖
+	if err := s.meta.InjectDependencies(
+		s.core,
+		s.common,
+		s.control,
+	); err != nil {
+		return fmt.Errorf("failed to inject meta dependencies: %w", err)
+	}
 
-    return nil
+	// 注入 Monitor 依赖
+	if err := s.monitor.InjectDependencies(
+		s.core,
+		s.common,
+	); err != nil {
+		return fmt.Errorf("failed to inject monitor dependencies: %w", err)
+	}
+
+	return nil
 }
 
-func (s *System) startSubSystems() error {
-    // 按顺序启动各子系统
-    if err := s.startMetaSystems(); err != nil {
-        return err
-    }
-    if err := s.startEvolutionSystems(); err != nil {
-        return err
-    }
-    if err := s.startControlSystems(); err != nil {
-        return err
-    }
-    if err := s.startMonitorSystems(); err != nil {
-        return err
-    }
-    return nil
+// Coordinate 协调系统状态
+func (s *System) Coordinate() error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	// 1. 验证依赖关系
+	if err := s.ValidateDependencies(); err != nil {
+		return fmt.Errorf("dependency validation failed: %w", err)
+	}
+
+	// 2. 检查系统健康状态
+	health := s.calculateSystemHealth()
+	if health < 0.5 {
+		return fmt.Errorf("system health too low: %f", health)
+	}
+
+	// 3. 更新系统指标
+	s.updateMetrics()
+
+	// 4. 协调子系统状态
+	for name, status := range s.GetSubsystemStatus() {
+		if status != "running" {
+			s.HandleEvent(types.SystemEvent{
+				Type:      "system.coordination",
+				Timestamp: time.Now(),
+				Data: map[string]interface{}{
+					"component": name,
+					"status":    status,
+					"action":    "recovery_needed",
+				},
+			})
+		}
+	}
+
+	return nil
 }
 
-func (s *System) stopSubSystems() error {
-    // 按顺序停止各子系统
-    if err := s.stopMonitorSystems(); err != nil {
-        return err
-    }
-    if err := s.stopControlSystems(); err != nil {
-        return err
-    }
-    if err := s.stopEvolutionSystems(); err != nil {
-        return err
-    }
-    if err := s.stopMetaSystems(); err != nil {
-        return err
-    }
-    return nil
-}
+// RestoreSubsystem 恢复子系统
+func (s *System) RestoreSubsystem(name string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
 
-// 计算系统指标的辅助方法
-func (s *System) calculateMemoryUsage() uint64 {
-    var m runtime.MemStats
-    runtime.ReadMemStats(&m)
-    
-    // 返回当前程序使用的内存量(字节)
-    // Alloc 表示已分配的内存
-    // Sys 表示从系统获取的内存
-    return m.Alloc
-}
-
-func (s *System) calculateCPUUsage() float64 {
-    // 使用简单的CPU使用率计算方法
-    startTime := time.Now()
-    startCPU := getCPUTime()
-    
-    // 等待一小段时间来计算CPU使用率
-    time.Sleep(100 * time.Millisecond)
-    
-    endTime := time.Now()
-    endCPU := getCPUTime()
-    
-    // 计算CPU使用率
-    cpuTime := endCPU - startCPU
-    realTime := endTime.Sub(startTime).Seconds()
-    
-    if realTime > 0 {
-        return cpuTime / realTime * 100.0
-    }
-    return 0.0
-}
-
-// getCPUTime 获取CPU时间
-func getCPUTime() float64 {
-    // 使用runtime.ReadMemStats来间接评估CPU时间
-    var m runtime.MemStats
-    runtime.ReadMemStats(&m)
-    
-    // 使用GC时间和系统CPU时间的组合来估算
-    return float64(m.GCSys) / 1e9
-}
-
-func (s *System) getGoroutineCount() int {
-    return runtime.NumGoroutine()
-}
-
-// 错误计数器
-var errorCounter int64 = 0
-
-func (s *System) getErrorCount() int64 {
-    return atomic.LoadInt64(&errorCounter)
-}
-
-func (s *System) incrementErrorCount() {
-    atomic.AddInt64(&errorCounter, 1)
-}
-
-// 事件计数器
-var eventCounter int64 = 0
-
-func (s *System) getEventCount() int64 {
-    return atomic.LoadInt64(&eventCounter)
-}
-
-func (s *System) incrementEventCount() {
-    atomic.AddInt64(&eventCounter, 1)
-}
-
-// 启动各个子系统组的方法
-func (s *System) startMetaSystems() error {
-    if s.meta.fieldSystem != nil {
-        if err := s.meta.fieldSystem.Start(); err != nil {
-            s.incrementErrorCount()
-            return fmt.Errorf("failed to start field system: %v", err)
-        }
-    }
-
-    if s.meta.emergenceSystem != nil {
-        if err := s.meta.emergenceSystem.Start(); err != nil {
-            s.incrementErrorCount()
-            return fmt.Errorf("failed to start emergence system: %v", err)
-        }
-    }
-
-    if s.meta.resonanceSystem != nil {
-        if err := s.meta.resonanceSystem.Start(); err != nil {
-            s.incrementErrorCount()
-            return fmt.Errorf("failed to start resonance system: %v", err)
-        }
-    }
-
-    s.incrementEventCount()
-    return nil
-}
-
-func (s *System) startEvolutionSystems() error {
-    if s.evolution.patternSystem != nil {
-        if err := s.evolution.patternSystem.Start(); err != nil {
-            s.incrementErrorCount()
-            return fmt.Errorf("failed to start pattern system: %v", err)
-        }
-    }
-
-    if s.evolution.mutationSystem != nil {
-        if err := s.evolution.mutationSystem.Start(); err != nil {
-            s.incrementErrorCount()
-            return fmt.Errorf("failed to start mutation system: %v", err)
-        }
-    }
-
-    if s.evolution.adaptationSystem != nil {
-        if err := s.evolution.adaptationSystem.Start(); err != nil {
-            s.incrementErrorCount()
-            return fmt.Errorf("failed to start adaptation system: %v", err)
-        }
-    }
-
-    s.incrementEventCount()
-    return nil
-}
-
-func (s *System) startControlSystems() error {
-    if s.control.stateManager != nil {
-        if err := s.control.stateManager.Start(); err != nil {
-            s.incrementErrorCount()
-            return fmt.Errorf("failed to start state manager: %v", err)
-        }
-    }
-
-    if s.control.flowController != nil {
-        if err := s.control.flowController.Start(); err != nil {
-            s.incrementErrorCount()
-            return fmt.Errorf("failed to start flow controller: %v", err)
-        }
-    }
-
-    if s.control.syncController != nil {
-        if err := s.control.syncController.Start(); err != nil {
-            s.incrementErrorCount()
-            return fmt.Errorf("failed to start sync controller: %v", err)
-        }
-    }
-
-    s.incrementEventCount()
-    return nil
-}
-
-func (s *System) startMonitorSystems() error {
-    if s.monitor.metricsSystem != nil {
-        if err := s.monitor.metricsSystem.Start(); err != nil {
-            s.incrementErrorCount()
-            return fmt.Errorf("failed to start metrics system: %v", err)
-        }
-    }
-
-    if s.monitor.traceSystem != nil {
-        if err := s.monitor.traceSystem.Start(); err != nil {
-            s.incrementErrorCount()
-            return fmt.Errorf("failed to start trace system: %v", err)
-        }
-    }
-
-    if s.monitor.alertSystem != nil {
-        if err := s.monitor.alertSystem.Start(); err != nil {
-            s.incrementErrorCount()
-            return fmt.Errorf("failed to start alert system: %v", err)
-        }
-    }
-
-    s.incrementEventCount()
-    return nil
-}
-
-// 停止各个子系统组的方法
-func (s *System) stopMetaSystems() error {
-    if s.meta.resonanceSystem != nil {
-        if err := s.meta.resonanceSystem.Stop(); err != nil {
-            s.incrementErrorCount()
-            return fmt.Errorf("failed to stop resonance system: %v", err)
-        }
-    }
-
-    if s.meta.emergenceSystem != nil {
-        if err := s.meta.emergenceSystem.Stop(); err != nil {
-            s.incrementErrorCount()
-            return fmt.Errorf("failed to stop emergence system: %v", err)
-        }
-    }
-
-    if s.meta.fieldSystem != nil {
-        if err := s.meta.fieldSystem.Stop(); err != nil {
-            s.incrementErrorCount()
-            return fmt.Errorf("failed to stop field system: %v", err)
-        }
-    }
-
-    s.incrementEventCount()
-    return nil
-}
-
-func (s *System) stopEvolutionSystems() error {
-    if s.evolution.adaptationSystem != nil {
-        if err := s.evolution.adaptationSystem.Stop(); err != nil {
-            s.incrementErrorCount()
-            return fmt.Errorf("failed to stop adaptation system: %v", err)
-        }
-    }
-
-    if s.evolution.mutationSystem != nil {
-        if err := s.evolution.mutationSystem.Stop(); err != nil {
-            s.incrementErrorCount()
-            return fmt.Errorf("failed to stop mutation system: %v", err)
-        }
-    }
-
-    if s.evolution.patternSystem != nil {
-        if err := s.evolution.patternSystem.Stop(); err != nil {
-            s.incrementErrorCount()
-            return fmt.Errorf("failed to stop pattern system: %v", err)
-        }
-    }
-
-    s.incrementEventCount()
-    return nil
-}
-
-func (s *System) stopControlSystems() error {
-    if s.control.syncController != nil {
-        if err := s.control.syncController.Stop(); err != nil {
-            s.incrementErrorCount()
-            return fmt.Errorf("failed to stop sync controller: %v", err)
-        }
-    }
-
-    if s.control.flowController != nil {
-        if err := s.control.flowController.Stop(); err != nil {
-            s.incrementErrorCount()
-            return fmt.Errorf("failed to stop flow controller: %v", err)
-        }
-    }
-
-    if s.control.stateManager != nil {
-        if err := s.control.stateManager.Stop(); err != nil {
-            s.incrementErrorCount()
-            return fmt.Errorf("failed to stop state manager: %v", err)
-        }
-    }
-
-    s.incrementEventCount()
-    return nil
-}
-
-func (s *System) stopMonitorSystems() error {
-    if s.monitor.alertSystem != nil {
-        if err := s.monitor.alertSystem.Stop(); err != nil {
-            s.incrementErrorCount()
-            return fmt.Errorf("failed to stop alert system: %v", err)
-        }
-    }
-
-    if s.monitor.traceSystem != nil {
-        if err := s.monitor.traceSystem.Stop(); err != nil {
-            s.incrementErrorCount()
-            return fmt.Errorf("failed to stop trace system: %v", err)
-        }
-    }
-
-    if s.monitor.metricsSystem != nil {
-        if err := s.monitor.metricsSystem.Stop(); err != nil {
-            s.incrementErrorCount()
-            return fmt.Errorf("failed to stop metrics system: %v", err)
-        }
-    }
-
-    s.incrementEventCount()
-    return nil
+	switch name {
+	case "common":
+		return s.common.Restore(s.ctx)
+	case "control":
+		return s.control.Restore(s.ctx)
+	case "evolution":
+		return s.evolution.Restore(s.ctx)
+	case "meta":
+		return s.meta.Restore(s.ctx)
+	case "monitor":
+		return s.monitor.Restore(s.ctx)
+	default:
+		return fmt.Errorf("unknown subsystem: %s", name)
+	}
 }
