@@ -61,6 +61,7 @@ type EnergySystem struct {
 	conversionEfficiency map[EnergyType]map[EnergyType]float64
 }
 
+// -----------------------------------------------
 // NewEnergySystem 创建能量系统
 func NewEnergySystem(capacity float64) *EnergySystem {
 	if capacity <= 0 {
@@ -294,4 +295,11 @@ func (es *EnergySystem) String() string {
 	state := es.GetEnergyState()
 	return fmt.Sprintf("EnergySystem{total: %.2f, capacity: %.2f, balance: %.2f, entropy: %.2f}",
 		state["total"], state["capacity"], state["balance"], state["entropy"])
+}
+
+// GetCapacity 获取能量系统容量
+func (es *EnergySystem) GetCapacity() float64 {
+	es.mu.RLock()
+	defer es.mu.RUnlock()
+	return es.capacity
 }
