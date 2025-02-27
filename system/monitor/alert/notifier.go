@@ -82,6 +82,7 @@ type NotificationHandler interface {
 	Validate(config map[string]string) error
 }
 
+// ---------------------------------------------------
 // NewNotifier 创建新的通知器
 func NewNotifier(config types.AlertConfig) *Notifier {
 	n := &Notifier{
