@@ -3,6 +3,7 @@
 package emergence
 
 import (
+	"context"
 	"fmt"
 	"math"
 	"math/cmplx"
@@ -20,13 +21,14 @@ type PatternDetector struct {
 
 	// 基础配置
 	config struct {
-		sensitivity      float64       // 检测灵敏度
-		timeWindow       time.Duration // 检测时间窗口
-		minConfidence    float64       // 最小置信度
-		patternThreshold float64       // 模式阈值
-		maxElementEnergy float64       // 最大元素能量
-		maxClusterRadius float64       // 最大聚集半径
-		maxEnergyLevel   float64       // 最大能量级别
+		sensitivity       float64       // 检测灵敏度
+		timeWindow        time.Duration // 检测时间窗口
+		minConfidence     float64       // 最小置信度
+		patternThreshold  float64       // 模式阈值
+		maxElementEnergy  float64       // 最大元素能量
+		maxClusterRadius  float64       // 最大聚集半径
+		maxEnergyLevel    float64       // 最大能量级别
+		DetectionInterval time.Duration // 检测间隔
 	}
 
 	// 检测状态
@@ -116,6 +118,7 @@ type QuantumCoherence struct {
 	Decoherence float64
 }
 
+// ------------------------------------------------------------------
 // NewPatternDetector 创建新的模式检测器
 func NewPatternDetector(field *field.UnifiedField) *PatternDetector {
 	pd := &PatternDetector{
@@ -130,6 +133,7 @@ func NewPatternDetector(field *field.UnifiedField) *PatternDetector {
 	pd.config.maxElementEnergy = 20.0
 	pd.config.maxClusterRadius = 5.0
 	pd.config.maxEnergyLevel = 100.0
+	pd.config.DetectionInterval = 5 * time.Second
 
 	// 初始化状态
 	pd.state.activePatterns = make(map[string]*EmergentPattern)
@@ -1463,4 +1467,39 @@ func (pc *PatternComponent) Clone() PatternComponent {
 	}
 
 	return clone
+}
+
+// Start 启动模式检测器
+func (pd *PatternDetector) Start(ctx context.Context) error {
+	pd.mu.Lock()
+	defer pd.mu.Unlock()
+
+	// 启动模式检测循环
+	go pd.detectionLoop(ctx)
+
+	return nil
+}
+
+// Stop 停止模式检测器
+func (pd *PatternDetector) Stop() error {
+	pd.mu.Lock()
+	defer pd.mu.Unlock()
+
+	// 清理资源
+	return nil
+}
+
+// detectionLoop 检测循环
+func (pd *PatternDetector) detectionLoop(ctx context.Context) {
+	ticker := time.NewTicker(pd.config.DetectionInterval)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			pd.Detect()
+		}
+	}
 }
