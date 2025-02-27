@@ -20,6 +20,7 @@ const (
 	HarmonyThreshold = 0.7 // 和谐阈值
 )
 
+// ---------------------------------------------
 // ValidateEnergy 验证能量值
 func ValidateEnergy(energy float64) bool {
 	// 检查是否是有限数
