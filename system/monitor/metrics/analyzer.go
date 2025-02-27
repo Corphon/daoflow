@@ -99,6 +99,7 @@ type AnalysisResult struct {
 	Insights []types.Insight
 }
 
+// ----------------------------------------------------------------------------
 // NewAnalyzer 创建新的分析器
 func NewAnalyzer(collector *Collector, config types.MetricsConfig) *Analyzer {
 	return &Analyzer{
@@ -174,7 +175,10 @@ func (a *Analyzer) analyze(ctx context.Context) error {
 
 	// 获取最新指标数据
 	metrics := a.collector.GetCurrentMetrics()
-	modelMetrics := a.collector.GetModelMetrics()
+	modelMetrics, err := a.collector.GetModelMetrics()
+	if err != nil {
+		return model.WrapError(err, model.ErrCodeOperation, "failed to get model metrics")
+	}
 	history := a.collector.GetMetricsHistory()
 
 	// 检查上下文
@@ -189,7 +193,7 @@ func (a *Analyzer) analyze(ctx context.Context) error {
 		ID:            generateAnalysisID(),
 		Timestamp:     time.Now(),
 		SystemMetrics: *metrics,
-		ModelMetrics:  *modelMetrics,
+		ModelMetrics:  modelMetrics,
 		History:       history,
 	}
 
