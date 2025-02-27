@@ -61,6 +61,7 @@ type ResonanceState struct {
 	Timestamp time.Time
 }
 
+// -----------------------------------------------
 // NewResonator 创建共振器
 func NewResonator() *Resonator {
 	return &Resonator{
