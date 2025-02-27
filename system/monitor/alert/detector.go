@@ -74,15 +74,35 @@ type MetricsSource interface {
 	GetModelMetrics() (model.ModelMetrics, error) // 添加获取模型指标的方法
 }
 
+// --------------------------------------------------------------------------
 // NewDetector 创建新的检测器
-func NewDetector(config types.AlertConfig, metricsSource MetricsSource) *Detector {
-	return &Detector{
-		config:        config,
-		conditions:    make(map[string]*AlertCondition),
-		states:        make(map[string]*AlertState),
-		alertChan:     make(chan types.AlertData, config.BufferSize),
-		metricsSource: metricsSource,
+func NewDetector(config types.AlertConfig, source MetricsSource) *Detector {
+	d := &Detector{
+		// 基础配置
+		config: config,
+
+		// 状态存储
+		conditions: make(map[string]*AlertCondition),
+		states:     make(map[string]*AlertState),
+
+		// 告警通道
+		alertChan: make(chan types.AlertData, config.BufferSize),
+
+		// 指标源
+		metricsSource: source,
+
+		// 模型管理器
+		modelStateManager: model.NewStateManager(
+			model.ModelTypeAlert,  // 告警模型类型
+			model.MaxSystemEnergy, // 使用系统最大能量作为容量
+		),
 	}
+
+	// 初始化状态
+	d.status.isRunning = false
+	d.status.lastCheck = time.Now()
+
+	return d
 }
 
 // Start 启动检测器
@@ -237,7 +257,7 @@ func (d *Detector) triggerAlert(condition *AlertCondition, value float64, modelM
 		Labels:  condition.Labels,
 		ModelData: &types.ModelAlertData{
 			Type:    condition.ModelType,
-			Metrics: modelMetrics,
+			Metrics: &modelMetrics,
 		},
 	}
 
