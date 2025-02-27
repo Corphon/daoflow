@@ -3,6 +3,7 @@
 package resonance
 
 import (
+	"context"
 	"fmt"
 	"math"
 	"sync"
@@ -19,9 +20,10 @@ type PatternMatcher struct {
 
 	// 基础配置
 	config struct {
-		matchThreshold float64 // 匹配阈值
-		minSimilarity  float64 // 最小相似度
-		maxDistance    float64 // 最大距离
+		matchThreshold   float64       // 匹配阈值
+		minSimilarity    float64       // 最小相似度
+		maxDistance      float64       // 最大距离
+		MatchingInterval time.Duration // 匹配间隔
 	}
 
 	// 匹配状态
@@ -85,6 +87,7 @@ type MatchEvent struct {
 	Success    bool
 }
 
+// ----------------------------------------
 // NewPatternMatcher 创建新的模式匹配器
 func NewPatternMatcher(
 	detector *emergence.PatternDetector,
@@ -99,6 +102,7 @@ func NewPatternMatcher(
 	pm.config.matchThreshold = 0.75
 	pm.config.minSimilarity = 0.6
 	pm.config.maxDistance = 0.4
+	pm.config.MatchingInterval = 100 * time.Millisecond
 
 	// 初始化状态
 	pm.state.matches = make(map[string]*MatchState)
@@ -579,4 +583,46 @@ func (pm *PatternMatcher) GetActivePatterns() ([]*emergence.EmergentPattern, err
 	}
 
 	return patterns, nil
+}
+
+// SetAmplifier 设置共振放大器
+func (pm *PatternMatcher) SetAmplifier(amplifier *ResonanceAmplifier) {
+	pm.mu.Lock()
+	defer pm.mu.Unlock()
+	pm.amplifier = amplifier
+}
+
+// Start 启动模式匹配器
+func (pm *PatternMatcher) Start(ctx context.Context) error {
+	pm.mu.Lock()
+	defer pm.mu.Unlock()
+
+	// 启动匹配循环
+	go pm.matchingLoop(ctx)
+
+	return nil
+}
+
+// Stop 停止模式匹配器
+func (pm *PatternMatcher) Stop() error {
+	pm.mu.Lock()
+	defer pm.mu.Unlock()
+
+	// 清理资源
+	return nil
+}
+
+// matchingLoop 匹配循环
+func (pm *PatternMatcher) matchingLoop(ctx context.Context) {
+	ticker := time.NewTicker(pm.config.MatchingInterval)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			pm.Match()
+		}
+	}
 }
