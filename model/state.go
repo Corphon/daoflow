@@ -28,6 +28,7 @@ type StateManager struct {
 	transformer *StateTransformer
 }
 
+// ------------------------------------------------------------------------
 // NewStateManager 创建状态管理器
 func NewStateManager(modelType ModelType, capacity float64) *StateManager {
 	sm := &StateManager{
