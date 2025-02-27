@@ -42,6 +42,7 @@ const (
 	ErrConservation ErrorCode = "CONSERVATION" // 守恒错误
 )
 
+// --------------------------------------------
 // NewCoreError 创建新的核心错误
 func NewCoreError(message string) error {
 	return &CoreError{
