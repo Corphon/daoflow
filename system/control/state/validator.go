@@ -89,6 +89,7 @@ type MetricPoint struct {
 	Values    map[string]float64
 }
 
+// ----------------------------------------
 // NewStateValidator 创建新的状态验证器
 func NewStateValidator() *StateValidator {
 	sv := &StateValidator{}
