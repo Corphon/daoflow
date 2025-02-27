@@ -118,6 +118,7 @@ type BalancerMetrics struct {
 	History      []MetricPoint // 历史指标
 }
 
+// ----------------------------------------------------
 // NewLoadBalancer 创建新的负载均衡器
 func NewLoadBalancer(
 	scheduler *Scheduler,
