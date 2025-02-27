@@ -55,6 +55,7 @@ type ReportSubscriber interface {
 	GetID() string
 }
 
+// ------------------------------------------------------------
 // AddSubscriber 添加报告订阅者
 func (r *Reporter) AddSubscriber(subscriber ReportSubscriber) {
 	r.mu.Lock()
