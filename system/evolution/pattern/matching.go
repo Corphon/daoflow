@@ -11,6 +11,7 @@ import (
 	"github.com/Corphon/daoflow/core"
 	"github.com/Corphon/daoflow/system/meta/emergence"
 	"github.com/Corphon/daoflow/system/meta/resonance"
+	"github.com/Corphon/daoflow/system/types"
 )
 
 // EvolutionMatcher 演化匹配器
@@ -97,21 +98,27 @@ type ContextState struct {
 	Influence float64
 }
 
+// ------------------------------------------------------------
 // NewEvolutionMatcher 创建新的演化匹配器
 func NewEvolutionMatcher(
 	recognizer *PatternRecognizer,
-	matcher *resonance.PatternMatcher) *EvolutionMatcher {
+	config *types.EvolutionConfig) (*EvolutionMatcher, error) {
+	if recognizer == nil {
+		return nil, fmt.Errorf("nil pattern recognizer")
+	}
+	if config == nil {
+		return nil, fmt.Errorf("nil evolution config")
+	}
 
 	em := &EvolutionMatcher{
 		recognizer: recognizer,
-		matcher:    matcher,
 	}
 
 	// 初始化配置
-	em.config.matchThreshold = 0.7
-	em.config.evolutionDepth = 5
-	em.config.adaptiveBias = 0.3
-	em.config.contextWeight = 0.4
+	em.config.matchThreshold = config.MatchThreshold
+	em.config.evolutionDepth = config.EvolutionDepth
+	em.config.adaptiveBias = config.AdaptiveBias
+	em.config.contextWeight = config.ContextWeight
 
 	// 初始化状态
 	em.state.matches = make(map[string]*EvolutionMatch)
@@ -123,7 +130,7 @@ func NewEvolutionMatcher(
 		Bias:        make(map[string]float64),
 	}
 
-	return em
+	return em, nil
 }
 
 // Match 执行演化匹配
@@ -135,10 +142,7 @@ func (em *EvolutionMatcher) Match() error {
 	em.updateContext()
 
 	// 获取当前模式
-	patterns, err := em.recognizer.GetPatterns()
-	if err != nil {
-		return err
-	}
+	patterns := em.recognizer.GetPatterns()
 
 	// 执行匹配
 	matches := em.matchPatterns(patterns)
