@@ -4,7 +4,9 @@ package metrics
 
 import (
 	"context"
+	"fmt"
 	"math"
+	"runtime"
 	"sync"
 	"time"
 
@@ -40,6 +42,21 @@ type Collector struct {
 		errors    []error
 	}
 
+	// 采集状态
+	state struct {
+		totalSamples   int64     // 总采样数
+		droppedSamples int64     // 丢弃采样数
+		lastCollection time.Time // 最后采集时间
+		metrics        struct {
+			AverageLatency time.Duration // 平均延迟
+			MaxLatency     time.Duration // 最大延迟
+			SuccessRate    float64       // 成功率
+		}
+	}
+
+	// 样本缓冲
+	samples []types.MetricsData
+
 	// 采集器组件
 	collectors map[types.MetricType]MetricCollector
 
@@ -64,6 +81,7 @@ func NewCollector(config types.MetricsConfig) *Collector {
 	}
 }
 
+// ---------------------------------------------------
 // Start 启动指标收集
 func (c *Collector) Start(ctx context.Context) error {
 	c.mu.Lock()
@@ -246,11 +264,11 @@ func (c *Collector) notify(alert types.Alert) {
 }
 
 // GetModelMetrics 获取模型指标
-func (c *Collector) GetModelMetrics() *model.ModelMetrics {
+func (c *Collector) GetModelMetrics() (model.ModelMetrics, error) {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 
-	metrics := &model.ModelMetrics{}
+	metrics := model.ModelMetrics{}
 
 	// 设置能量指标
 	metrics.Energy.Total = c.current.System.Energy
@@ -267,7 +285,7 @@ func (c *Collector) GetModelMetrics() *model.ModelMetrics {
 	metrics.State.Transitions = c.countStateTransitions()
 	metrics.State.Uptime = c.calculateUptime()
 
-	return metrics
+	return metrics, nil
 }
 
 // calculateAverageEnergy 计算平均能量
@@ -372,4 +390,112 @@ func (c *Collector) calculateUptime() float64 {
 	}
 	duration := time.Since(c.history[0].Timestamp)
 	return duration.Seconds()
+}
+
+// GetMetricsMap 实现 MetricsSource 接口
+func (c *Collector) GetMetricsMap() (map[string]float64, error) {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+
+	metrics := make(map[string]float64)
+
+	// 基础系统指标
+	metrics["energy"] = c.current.System.Energy
+	metrics["field_strength"] = c.current.System.Field.GetStrength()
+	metrics["coherence"] = c.current.System.Quantum.GetCoherence()
+
+	// 性能指标
+	metrics["collection_rate"] = float64(c.state.totalSamples) / float64(c.state.droppedSamples+1)
+	metrics["avg_latency"] = float64(c.state.metrics.AverageLatency.Milliseconds())
+	metrics["max_latency"] = float64(c.state.metrics.MaxLatency.Milliseconds())
+	metrics["success_rate"] = c.state.metrics.SuccessRate
+
+	// 资源指标
+	metrics["memory_usage"] = float64(c.getMemoryUsage())
+	metrics["goroutines"] = float64(c.getGoroutineCount())
+
+	return metrics, nil
+}
+
+// GetMetric 实现 MetricsSource 接口
+func (c *Collector) GetMetric(name string) (float64, error) {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+
+	// 从当前指标中获取值
+	switch name {
+	case "energy":
+		return c.current.System.Energy, nil
+	case "field_strength":
+		return c.current.System.Field.GetStrength(), nil
+	case "coherence":
+		return c.current.System.Quantum.GetCoherence(), nil
+	default:
+		if val, ok := c.current.Custom[name].(float64); ok {
+			return val, nil
+		}
+		return 0, fmt.Errorf("metric %s not found", name)
+	}
+}
+
+// GetMetrics implements alert.MetricsSource
+func (c *Collector) GetMetrics() (map[string]float64, error) {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+
+	metrics := make(map[string]float64)
+
+	// 基础系统指标
+	metrics["energy"] = c.current.System.Energy
+	metrics["field_strength"] = c.current.System.Field.GetStrength()
+	metrics["coherence"] = c.current.System.Quantum.GetCoherence()
+
+	// 性能指标
+	metrics["collection_rate"] = float64(c.state.totalSamples) / float64(c.state.droppedSamples+1)
+	metrics["avg_latency"] = float64(c.state.metrics.AverageLatency.Milliseconds())
+	metrics["max_latency"] = float64(c.state.metrics.MaxLatency.Milliseconds())
+	metrics["success_rate"] = c.state.metrics.SuccessRate
+
+	// 资源指标
+	metrics["memory_usage"] = float64(c.getMemoryUsage())
+	metrics["goroutines"] = float64(c.getGoroutineCount())
+
+	return metrics, nil
+}
+
+// GetMetricsData 获取收集器指标
+func (c *Collector) GetMetricsData() map[string]interface{} {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+
+	metrics := make(map[string]interface{})
+	// 基础指标
+	metrics["samples_collected"] = c.state.totalSamples
+	metrics["samples_dropped"] = c.state.droppedSamples
+	metrics["collection_rate"] = float64(c.state.totalSamples) / float64(c.state.droppedSamples+1)
+	metrics["last_collection"] = c.state.lastCollection
+	metrics["buffer_size"] = len(c.samples)
+
+	// 性能指标
+	metrics["avg_latency"] = c.state.metrics.AverageLatency.Milliseconds()
+	metrics["max_latency"] = c.state.metrics.MaxLatency.Milliseconds()
+	metrics["success_rate"] = c.state.metrics.SuccessRate
+
+	// 资源使用
+	metrics["memory_usage"] = c.getMemoryUsage()
+	metrics["goroutines"] = c.getGoroutineCount()
+
+	return metrics
+}
+
+// getMemoryUsage 获取内存使用情况
+func (c *Collector) getMemoryUsage() uint64 {
+	var m runtime.MemStats
+	runtime.ReadMemStats(&m)
+	return m.Alloc / 1024 / 1024 // 转换为MB
+}
+
+// getGoroutineCount 获取协程数量
+func (c *Collector) getGoroutineCount() int {
+	return runtime.NumGoroutine()
 }
