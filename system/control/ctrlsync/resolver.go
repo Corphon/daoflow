@@ -138,6 +138,7 @@ type ResolutionMetrics struct {
 	History        []types.MetricPoint // 历史指标
 }
 
+// -----------------------------------------------
 // NewResolver 创建新的解决器
 func NewResolver() *Resolver {
 	r := &Resolver{}
