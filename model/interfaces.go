@@ -9,12 +9,37 @@ import (
 	"github.com/Corphon/daoflow/core"
 )
 
+// Model 模型接口
+type Model interface {
+	// 基础操作
+	Start() error
+	Stop() error
+	Reset() error
+	Close() error
+
+	// 状态管理
+	GetState() ModelState
+	GetSystemState() SystemState
+	Transform(pattern TransformPattern) error
+
+	// 核心操作
+	GetCoreState() CoreState
+	UpdateCoreState(state CoreState) error
+	ValidateCoreState() error
+
+	// 能量操作
+	SetEnergy(energy float64) error
+	AdjustEnergy(delta float64) error
+}
+
 // CoreState core层状态
 type CoreState struct {
 	QuantumState  *core.QuantumState // 量子态
 	FieldState    *core.Field        // 场态
 	EnergyState   *core.EnergySystem // 能量态
 	InteractState *core.Interaction  // 交互态
+	Phase         float64
+	Properties    map[string]float64
 }
 
 // CoreComponent core层组件
@@ -35,6 +60,7 @@ const (
 	ModelBaGua               // 八卦模型
 	ModelGanZhi              // 干支模型
 	ModelIntegrate           // 集成模型
+	ModelTypeAlert           // 告警模型
 	ModelTypeMax
 )
 
@@ -42,14 +68,15 @@ const (
 type Phase uint8
 
 const (
-	PhaseNone  Phase = iota
-	PhaseYin         // 阴相
-	PhaseYang        // 阳相
-	PhaseWood        // 木相
-	PhaseFire        // 火相
-	PhaseEarth       // 土相
-	PhaseMetal       // 金相
-	PhaseWater       // 水相
+	PhaseNone    Phase = iota
+	PhaseYin           // 阴相
+	PhaseYang          // 阳相
+	PhaseYinYang       // 阴阳平衡相位
+	PhaseWood          // 木相
+	PhaseFire          // 火相
+	PhaseEarth         // 土相
+	PhaseMetal         // 金相
+	PhaseWater         // 水相
 	PhaseMax
 )
 
@@ -70,6 +97,7 @@ const (
 	PhaseTransform Phase = iota + PhaseMax // 转换相位
 	Phase_Stable                           // 稳定相位
 	Phase_Unstable                         // 不稳定相位
+	PhaseNeutral                           // 中性相位
 )
 
 // Nature 属性
@@ -121,33 +149,41 @@ type FlowModel interface {
 
 // FlowPattern 流模式
 type FlowPattern struct {
-	ID       string        // 模式ID
-	Type     string        // 模式类型
-	Flow     FlowModel     // 相关流模型
-	Strength float64       // 模式强度
-	Duration time.Duration // 持续时间
-	State    ModelState    // 关联状态
+	ID         string                 // 模式ID
+	Type       string                 // 模式类型
+	Flow       FlowModel              // 相关流模型
+	Strength   float64                // 模式强度
+	Duration   time.Duration          // 持续时间
+	State      ModelState             // 关联状态
+	Metrics    PatternMetrics         // 模式指标
+	Properties map[string]interface{} // 模式属性
+	Created    time.Time              // 创建时间
 }
 
 // Anomaly 异常
 type Anomaly struct {
-	ID      string                 // 异常ID
-	Type    string                 // 异常类型
-	Level   string                 // 严重级别
-	Message string                 // 异常描述
-	Source  string                 // 异常来源
-	Time    time.Time              // 发生时间
-	Data    map[string]interface{} // 异常数据
+	ID        string                 // 异常ID
+	Type      string                 // 异常类型
+	Level     string                 // 严重级别
+	Message   string                 // 异常描述
+	Source    string                 // 异常来源
+	Time      time.Time              // 发生时间
+	Data      map[string]interface{} // 异常数据
+	Subtype   string                 // 异常子类型
+	Severity  float64                // 严重程度
+	Value     float64                // 当前值
+	Expected  float64                // 期望值
+	Threshold float64                // 阈值
+
 }
 
 // SystemState 系统状态
 type SystemState struct {
 	// 基础属性
-	Energy    float64   // 系统能量
-	Entropy   float64   // 系统熵
-	Harmony   float64   // 和谐度
-	Balance   float64   // 平衡度
-	Phase     Phase     // 系统相位
+	Entropy float64 // 系统熵
+	Harmony float64 // 和谐度
+	Balance float64 // 平衡度
+
 	Timestamp time.Time // 时间戳
 
 	// 子系统能量
@@ -165,8 +201,10 @@ type SystemState struct {
 		GanZhiEnergy float64 // 干支能量
 	}
 
-	// 扩展属性
-	Properties map[string]interface{}
+	Phase      Phase                  `json:"phase"`      // 系统相位
+	Energy     float64                `json:"energy"`     // 系统能量
+	Stability  float64                `json:"stability"`  // 系统稳定性
+	Properties map[string]interface{} `json:"properties"` // 系统属性
 }
 
 // ModelState 模型状态
