@@ -12,6 +12,7 @@ import (
 
 	"github.com/Corphon/daoflow/model"
 	"github.com/Corphon/daoflow/system/meta/emergence"
+	"github.com/Corphon/daoflow/system/types"
 )
 
 // PatternGenerator 模式生成器
@@ -155,21 +156,23 @@ type MetricPoint struct {
 	Metrics   map[string]float64
 }
 
+// -------------------------------------------------------------------------------
 // NewPatternGenerator 创建新的模式生成器
-func NewPatternGenerator(
-	recognizer *PatternRecognizer,
-	matcher *EvolutionMatcher) *PatternGenerator {
+func NewPatternGenerator(config *types.PatternConfig) (*PatternGenerator, error) {
+	if config == nil {
+		return nil, fmt.Errorf("nil pattern config")
+	}
 
 	pg := &PatternGenerator{
-		recognizer: recognizer,
-		matcher:    matcher,
+		recognizer: nil, // 稍后注入
+		matcher:    nil, // 稍后注入
 	}
 
 	// 初始化配置
-	pg.config.generationRate = 0.3
-	pg.config.mutationRate = 0.1
-	pg.config.complexityBias = 0.4
-	pg.config.energyBalance = 0.7
+	pg.config.generationRate = config.Base.GenerationRate
+	pg.config.mutationRate = config.Base.MutationRate
+	pg.config.complexityBias = config.Base.ComplexityBias
+	pg.config.energyBalance = config.Base.EnergyBalance
 
 	// 初始化状态
 	pg.state.templates = make(map[string]*GenerationTemplate)
@@ -180,7 +183,7 @@ func NewPatternGenerator(
 		Evolution:      make([]MetricPoint, 0),
 	}
 
-	return pg
+	return pg, nil
 }
 
 // Generate 生成新模式
