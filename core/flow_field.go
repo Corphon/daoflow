@@ -5,6 +5,7 @@ package core
 import (
 	"math"
 	"sync"
+	"time"
 )
 
 // 场的基本常数
@@ -59,6 +60,166 @@ type Field struct {
 	// 阴阳属性
 	YinField  *Field // 阴性场
 	YangField *Field // 阳性场
+}
+
+// FieldSystem 场系统
+type FieldSystem struct {
+	mu sync.RWMutex
+
+	// 场组件
+	fields  map[string]*Field // 场集合
+	unified *UnifiedField     // 统一场
+
+	// 系统属性
+	energy    float64 // 总能量
+	strength  float64 // 场强度
+	coupling  float64 // 耦合强度
+	resonance float64 // 共振强度
+
+	// 配置
+	config *FieldConfig
+
+	// 状态
+	state struct {
+		lastUpdate time.Time
+		metrics    map[string]float64
+	}
+}
+
+// UnifiedField 统一场结构
+type UnifiedField struct {
+	mu sync.RWMutex
+
+	// 基础场属性
+	dimension int       // 场维度
+	gridSize  int       // 网格大小
+	fields    []*Field  // 子场集合
+	boundary  []float64 // 边界条件
+
+	// 场状态
+	state struct {
+		strength float64            // 总场强度
+		energy   float64            // 总能量
+		phase    float64            // 统一相位
+		coupling float64            // 耦合强度
+		metrics  map[string]float64 // 统一场指标
+	}
+
+	// 量子特性
+	quantum struct {
+		coherence    float64 // 相干性
+		entanglement float64 // 纠缠度
+		correlation  float64 // 关联度
+	}
+
+	// 场组合
+	scalarField *Field // 标量场
+	vectorField *Field // 向量场
+	tensorField *Field // 张量场
+
+	// 配置
+	config *FieldConfig
+}
+
+// --------------------------------------------
+// NewFieldSystem 创建新的场系统
+func NewFieldSystem(config *FieldConfig) *FieldSystem {
+	if config == nil {
+		config = DefaultFieldConfig()
+	}
+
+	return &FieldSystem{
+		fields:  make(map[string]*Field),
+		unified: NewUnifiedField(config.Dimension),
+		config:  config,
+	}
+}
+
+// NewUnifiedField 创建新的统一场
+func NewUnifiedField(dimension int) *UnifiedField {
+	uf := &UnifiedField{
+		dimension: dimension,
+		gridSize:  DefaultGridSize,
+		fields:    make([]*Field, 0),
+		boundary:  make([]float64, dimension*2),
+	}
+
+	// 初始化子场
+	uf.scalarField = NewField(ScalarField, dimension)
+	uf.vectorField = NewField(VectorField, dimension)
+	uf.tensorField = NewField(TensorField, dimension)
+
+	// 添加到场集合
+	uf.fields = append(uf.fields, uf.scalarField, uf.vectorField, uf.tensorField)
+
+	// 初始化状态
+	uf.state.metrics = make(map[string]float64)
+
+	return uf
+}
+
+// GetEnergy 获取统一场总能量
+func (uf *UnifiedField) GetEnergy() float64 {
+	uf.mu.RLock()
+	defer uf.mu.RUnlock()
+	return uf.state.energy
+}
+
+// GetStrength 获取统一场强度
+func (uf *UnifiedField) GetStrength() float64 {
+	uf.mu.RLock()
+	defer uf.mu.RUnlock()
+	return uf.state.strength
+}
+
+// Evolve 演化统一场
+func (uf *UnifiedField) Evolve() error {
+	uf.mu.Lock()
+	defer uf.mu.Unlock()
+
+	// 演化各个子场
+	for _, field := range uf.fields {
+		if err := field.Evolve(); err != nil {
+			return err
+		}
+	}
+
+	// 更新统一场状态
+	uf.updateState()
+
+	return nil
+}
+
+// 更新统一场状态
+func (uf *UnifiedField) updateState() {
+	// 计算总能量
+	totalEnergy := 0.0
+	for _, field := range uf.fields {
+		totalEnergy += field.GetStrength()
+	}
+	uf.state.energy = totalEnergy
+
+	// 更新其他状态
+	uf.state.strength = totalEnergy / float64(len(uf.fields))
+	uf.updateQuantumProperties()
+}
+
+// 更新量子特性
+func (uf *UnifiedField) updateQuantumProperties() {
+	// 计算相干性
+	coherence := 0.0
+	for _, field := range uf.fields {
+		coherence += field.GetCoherence()
+	}
+	uf.quantum.coherence = coherence / float64(len(uf.fields))
+
+}
+
+// GetEnergy 获取场系统总能量
+func (fs *FieldSystem) GetEnergy() float64 {
+	fs.mu.RLock()
+	defer fs.mu.RUnlock()
+	return fs.energy
 }
 
 // NewField 创建新的场
@@ -590,4 +751,61 @@ func (fs *FieldState) GetResonance() float64 {
 
 	// 归一化到[0,1]区间
 	return math.Min(1.0, resonance/10.0) // 10.0作为归一化因子
+}
+
+// GetStrength 获取场强度
+func (fs *FieldSystem) GetStrength() float64 {
+	fs.mu.RLock()
+	defer fs.mu.RUnlock()
+	return fs.strength
+}
+
+// GetCoupling 获取场耦合强度
+func (fs *FieldSystem) GetCoupling() float64 {
+	fs.mu.RLock()
+	defer fs.mu.RUnlock()
+	return fs.coupling
+}
+
+// GetResonance 获取场共振强度
+func (fs *FieldSystem) GetResonance() float64 {
+	fs.mu.RLock()
+	defer fs.mu.RUnlock()
+	return fs.resonance
+}
+
+// GetEnergy 获取场能量
+func (fs *FieldState) GetEnergy() float64 {
+	fs.mu.RLock()
+	defer fs.mu.RUnlock()
+	return fs.Energy
+}
+
+// GetEnergyFlow 获取能量流动
+func (fs *FieldState) GetEnergyFlow() float64 {
+	fs.mu.RLock()
+	defer fs.mu.RUnlock()
+	return fs.Flow
+}
+
+// GetMetrics 获取场态指标
+func (fs *FieldState) GetMetrics() map[string]interface{} {
+	fs.mu.RLock()
+	defer fs.mu.RUnlock()
+
+	return map[string]interface{}{
+		"strength":  fs.GetStrength(),
+		"energy":    fs.GetEnergy(),
+		"coupling":  fs.GetCoupling(),
+		"resonance": fs.GetResonance(),
+		"phase":     fs.Phase,
+		"frequency": fs.Frequency,
+		"amplitude": fs.Amplitude,
+		"flow":      fs.Flow,
+	}
+}
+
+// GetState 获取场状态自身
+func (f *Field) GetState() *Field {
+	return f
 }
