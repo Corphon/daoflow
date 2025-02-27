@@ -66,6 +66,20 @@ type Tracker struct {
 		errors    []error
 	}
 
+	// 追踪状态
+	activeTraces map[types.TraceID]*types.Trace // 活跃的追踪
+	traceBuffer  chan *types.Trace              // 追踪缓冲区
+
+	// 统计信息
+	stats struct {
+		completedTraces int64         // 完成的追踪数
+		errorTraces     int64         // 错误的追踪数
+		totalSpans      int64         // 总跨度数
+		spansPerTrace   float64       // 每个追踪的平均跨度数
+		avgDuration     time.Duration // 平均持续时间
+		lastUpdate      time.Time     // 最后更新时间
+	}
+
 	// 新增：模型状态管理器
 	modelManager *model.StateManager
 }
@@ -76,6 +90,7 @@ type SpanSubscriber interface {
 	OnModelEvent(model.ModelEvent) error // 新增：处理模型事件
 }
 
+// -------------------------------------------------
 // NewTracker 创建新的追踪器
 func NewTracker(config types.TraceConfig) *Tracker {
 	t := &Tracker{
@@ -333,6 +348,24 @@ func (t *Tracker) recordError(err error) {
 	defer t.mu.Unlock()
 
 	t.status.errors = append(t.status.errors, err)
+}
+
+// GetMetrics 获取追踪指标
+func (t *Tracker) GetMetrics() map[string]interface{} {
+	t.mu.RLock()
+	defer t.mu.RUnlock()
+
+	return map[string]interface{}{
+		"active_traces":    len(t.activeTraces),
+		"completed_traces": t.stats.completedTraces,
+		"error_traces":     t.stats.errorTraces,
+		"avg_duration":     t.stats.avgDuration.String(),
+		"total_spans":      t.stats.totalSpans,
+		"spans_per_trace":  t.stats.spansPerTrace,
+		"buffer_capacity":  t.config.BufferSize,
+		"buffer_used":      len(t.traceBuffer),
+		"last_update":      t.stats.lastUpdate.Format(time.RFC3339),
+	}
 }
 
 // SpanOption 跨度选项函数类型
