@@ -7,7 +7,15 @@ import (
 	"runtime"
 	"strings"
 	"sync"
+	"time"
 )
+
+// SystemError 类型别名，避免循环依赖
+type SystemError interface {
+	Error() string
+	GetCode() ErrorCode
+	GetContext() map[string]interface{}
+}
 
 // ErrorCode 错误码
 type ErrorCode string
@@ -38,11 +46,12 @@ const (
 	ErrCodeLimit     ErrorCode = "LIMIT"     // 限制错误
 
 	//new
-	ErrCodeInvalid  ErrorCode = "invalid"  // 无效参数
-	ErrCodeRange    ErrorCode = "range"    // 超出范围
-	ErrCodeNone     ErrorCode = ""         // 无错误
-	ErrCodeInternal ErrorCode = "internal" // 内部错误
-	ErrCodeIO       ErrorCode = "io"       // IO错误
+	ErrCodeInvalid   ErrorCode = "invalid"   // 无效参数
+	ErrCodeRange     ErrorCode = "range"     // 超出范围
+	ErrCodeNone      ErrorCode = ""          // 无错误
+	ErrCodeInternal  ErrorCode = "internal"  // 内部错误
+	ErrCodeIO        ErrorCode = "io"        // IO错误
+	ErrCodeComponent ErrorCode = "Component" // 组件错误
 
 	// 严重级别错误码
 	ErrCodeCritical ErrorCode = "CRITICAL" // 严重错误
@@ -63,6 +72,7 @@ const (
 	ErrCodeQuorum    ErrorCode = "QUORUM"    // 法定人数错误
 	ErrCodeVote      ErrorCode = "VOTE"      // 投票错误
 	ErrCodeAgreement ErrorCode = "AGREEMENT" // 协议错误
+
 )
 
 // ModelError 模型错误
@@ -73,6 +83,7 @@ type ModelError struct {
 	Stack   []string  // 错误堆栈
 }
 
+// ---------------------------------------------
 // Error 实现 error 接口
 func (e *ModelError) Error() string {
 	var b strings.Builder
@@ -94,6 +105,52 @@ func (e *ModelError) Error() string {
 	}
 
 	return b.String()
+}
+
+// LogError 记录错误信息
+func LogError(err error) {
+	if err == nil {
+		return
+	}
+
+	// 创建错误记录
+	record := struct {
+		Time    time.Time
+		Error   string
+		Code    ErrorCode
+		Stack   []string
+		Context map[string]interface{}
+	}{
+		Time:    time.Now(),
+		Error:   err.Error(),
+		Context: make(map[string]interface{}),
+	}
+
+	// 获取错误码
+	if me, ok := err.(*ModelError); ok {
+		record.Code = me.Code
+		record.Stack = me.Stack
+	}
+
+	// 获取错误上下文
+	if se, ok := err.(SystemError); ok {
+		record.Context = se.GetContext()
+	}
+
+	// 使用默认错误处理器记录
+	handler := GetErrorHandler()
+	if handler != nil {
+		handler.Handle(err)
+	}
+
+	// 打印错误信息到标准输出（可以根据需要修改为其他输出方式）
+	fmt.Printf("[ERROR] %v Code=%v\n%v\nStack:\n%v\nContext:%v\n",
+		record.Time.Format(time.RFC3339),
+		record.Code,
+		record.Error,
+		strings.Join(record.Stack, "\n"),
+		record.Context,
+	)
 }
 
 // NewModelError 创建新的模型错误
