@@ -5,12 +5,15 @@ package pattern
 import (
 	"fmt"
 	"math"
+	"sort"
 	"sync"
 	"time"
 
+	"github.com/Corphon/daoflow/model"
 	"github.com/Corphon/daoflow/system/common"
 	"github.com/Corphon/daoflow/system/meta/emergence"
 	"github.com/Corphon/daoflow/system/meta/resonance"
+	"github.com/Corphon/daoflow/system/types"
 )
 
 const (
@@ -48,6 +51,10 @@ type PatternSignature struct {
 	Structure  map[string]interface{} // 结构特征
 	Dynamics   map[string]float64     // 动态特征
 	Context    map[string]string      // 上下文信息
+	Features   map[string]float64
+	Strength   float64
+	Energy     float64
+	Stability  float64
 }
 
 // ComponentConnection 组件连接
@@ -90,23 +97,20 @@ type StatPoint struct {
 	Metrics   map[string]float64
 }
 
+// ---------------------------------------------------------------
 // NewPatternRecognizer 创建新的模式识别器
-func NewPatternRecognizer(
-	detector *emergence.PatternDetector,
-	matcher *resonance.PatternMatcher,
-	amplifier *resonance.ResonanceAmplifier) *PatternRecognizer {
-
-	pr := &PatternRecognizer{
-		detector:  detector,
-		matcher:   matcher,
-		amplifier: amplifier,
+func NewPatternRecognizer(config *types.RecognitionConfig) (*PatternRecognizer, error) {
+	if config == nil {
+		return nil, fmt.Errorf("nil recognition config")
 	}
 
+	pr := &PatternRecognizer{}
+
 	// 初始化配置
-	pr.config.minConfidence = 0.75
-	pr.config.learningRate = 0.1
-	pr.config.memoryDepth = 100
-	pr.config.adaptiveRate = true
+	pr.config.minConfidence = config.Base.MinConfidence
+	pr.config.learningRate = config.Base.LearningRate
+	pr.config.memoryDepth = config.Memory.MaxSize
+	pr.config.adaptiveRate = config.Base.AdaptiveRate
 
 	// 初始化状态
 	pr.state.patterns = make(map[string]*RecognizedPattern)
@@ -117,7 +121,7 @@ func NewPatternRecognizer(
 		Evolution:   make([]StatPoint, 0),
 	}
 
-	return pr
+	return pr, nil
 }
 
 // Recognize 执行模式识别
@@ -348,13 +352,28 @@ func (pr *PatternRecognizer) isPatternMatch(recognized *RecognizedPattern, patte
 }
 
 // updatePatternState 更新模式状态
-func (pr *PatternRecognizer) updatePatternState(recognized *RecognizedPattern, pattern emergence.EmergentPattern) {
-	// 更新基本信息
+func (pr *PatternRecognizer) updatePatternState(recognized *RecognizedPattern, pattern emergence.EmergentPattern) error {
+	// 如果是新模式,创建一个RecognizedPattern
+	if recognized == nil {
+		recognized = &RecognizedPattern{
+			ID:         generatePatternID(),
+			Type:       pattern.Type,
+			FirstSeen:  time.Now(),
+			Properties: make(map[string]float64),
+			Evolution:  make([]PatternState, 0),
+		}
+		pr.state.patterns[recognized.ID] = recognized
+	}
+
+	// 更新识别的模式状态
 	recognized.LastSeen = time.Now()
 	recognized.Occurrences++
 	recognized.Active = true
+	recognized.Signature = pr.extractSignature(pattern)
+	recognized.Properties = pattern.Properties
+	recognized.Confidence = pr.evaluatePattern(pattern, recognized.Signature)
 
-	// 更新模式状态
+	// 添加演化状态
 	state := PatternState{
 		Pattern:    &pattern,
 		Active:     true,
@@ -364,13 +383,7 @@ func (pr *PatternRecognizer) updatePatternState(recognized *RecognizedPattern, p
 	}
 	recognized.Evolution = append(recognized.Evolution, state)
 
-	// 更新置信度
-	newConfidence := pr.evaluatePattern(pattern, recognized.Signature)
-	recognized.Confidence = recognized.Confidence*(1-pr.config.learningRate) +
-		newConfidence*pr.config.learningRate
-
-	// 更新稳定性
-	recognized.Stability = calculatePatternStability(recognized)
+	return nil
 }
 
 // shouldRetainPattern 判断是否应该保留模式
@@ -667,20 +680,15 @@ func generatePatternID() string {
 }
 
 // GetPatterns 获取已识别的模式
-func (pr *PatternRecognizer) GetPatterns() ([]*RecognizedPattern, error) {
+func (pr *PatternRecognizer) GetPatterns() []*RecognizedPattern {
 	pr.mu.RLock()
 	defer pr.mu.RUnlock()
 
 	patterns := make([]*RecognizedPattern, 0, len(pr.state.patterns))
-
-	// 只返回活跃且置信度足够的模式
 	for _, pattern := range pr.state.patterns {
-		if pattern.Active && pattern.Confidence >= pr.config.minConfidence {
-			patterns = append(patterns, pattern)
-		}
+		patterns = append(patterns, pattern)
 	}
-
-	return patterns, nil
+	return patterns
 }
 
 // GetPattern 获取指定ID的模式
@@ -714,4 +722,178 @@ func (rp *RecognizedPattern) GetActivationLevel() float64 {
 
 	// 组合计算
 	return (activation*0.5 + usageScore*0.3) * timeDecay
+}
+
+// DetectPattern 检测输入数据中的模式
+func (pr *PatternRecognizer) DetectPattern(data interface{}) (*model.FlowPattern, error) {
+	pr.mu.Lock()
+	defer pr.mu.Unlock()
+
+	// 1. 转换输入数据为特征向量
+	features := extractFeatureV(data)
+
+	// 2. 检测模式
+	patterns := make([]*RecognizedPattern, 0)
+	for _, p := range pr.state.patterns {
+		if pr.matchFeatures(p, features) {
+			patterns = append(patterns, p)
+		}
+	}
+
+	// 3. 选择最匹配的模式
+	if len(patterns) == 0 {
+		return nil, nil
+	}
+
+	bestPattern := selectBestPattern(patterns)
+	return convertToFlowPattern(bestPattern), nil
+}
+
+// extractFeatureVector 提取特征向量
+func extractFeatureV(data interface{}) map[string]float64 {
+	features := make(map[string]float64)
+
+	switch v := data.(type) {
+	case *emergence.EmergentPattern:
+		// 从EmergentPattern提取
+		features = extractFeatureVector(v)
+	case map[string]interface{}:
+		// 从map提取
+		for k, val := range v {
+			if f, ok := val.(float64); ok {
+				features[k] = f
+			}
+		}
+	}
+
+	return features
+}
+
+// matchFeatures 匹配特征
+func (pr *PatternRecognizer) matchFeatures(pattern *RecognizedPattern, features map[string]float64) bool {
+	if pattern == nil {
+		return false
+	}
+
+	// 计算特征相似度
+	similarity := calculateFeatureSimilarity(pattern.Features, features)
+	return similarity >= pr.config.minConfidence
+}
+
+// calculateFeatureSimilarity 计算特征相似度
+func calculateFeatureSimilarity(features1, features2 map[string]float64) float64 {
+	if len(features1) == 0 || len(features2) == 0 {
+		return 0
+	}
+
+	similarity := 0.0
+	count := 0.0
+
+	// 遍历所有共同特征
+	for key, val1 := range features1 {
+		if val2, exists := features2[key]; exists {
+			similarity += 1.0 - math.Abs(val1-val2)
+			count++
+		}
+	}
+
+	if count == 0 {
+		return 0
+	}
+
+	return similarity / count
+}
+
+// selectBestPattern 选择最佳匹配模式
+func selectBestPattern(patterns []*RecognizedPattern) *RecognizedPattern {
+	if len(patterns) == 0 {
+		return nil
+	}
+
+	// 根据置信度排序
+	sort.Slice(patterns, func(i, j int) bool {
+		return patterns[i].Confidence > patterns[j].Confidence
+	})
+
+	return patterns[0]
+}
+
+// convertToFlowPattern 转换为流模式
+func convertToFlowPattern(pattern *RecognizedPattern) *model.FlowPattern {
+	if pattern == nil {
+		return nil
+	}
+
+	// 转换Properties类型
+	properties := make(map[string]interface{})
+	for k, v := range pattern.Properties {
+		properties[k] = v
+	}
+
+	return &model.FlowPattern{
+		ID:   pattern.ID,
+		Type: pattern.Type,
+		Metrics: model.PatternMetrics{
+			Strength:   pattern.Strength,
+			Confidence: pattern.Confidence,
+			Duration:   time.Since(pattern.Created),
+		},
+		Properties: properties,
+		Created:    pattern.Created,
+	}
+}
+
+// AnalyzePattern 分析模式
+func (pr *PatternRecognizer) AnalyzePattern(pattern *model.FlowPattern) error {
+	pr.mu.Lock()
+	defer pr.mu.Unlock()
+
+	// 1. 转换类型
+	emergentPattern := convertFlowToEmergentPattern(pattern)
+
+	// 2. 提取模式特征
+	signature := pr.extractSignature(emergentPattern)
+
+	// 3. 评估模式
+	confidence := pr.evaluatePattern(emergentPattern, signature)
+
+	// 4. 更新状态
+	if confidence >= pr.config.minConfidence {
+		// 创建或获取已识别模式
+		var recognized *RecognizedPattern
+		if existing := pr.GetPattern(pattern.ID); existing != nil {
+			recognized = existing
+		} else {
+			recognized = &RecognizedPattern{
+				ID:         pattern.ID,
+				Type:       pattern.Type,
+				FirstSeen:  time.Now(),
+				Features:   make(map[string]float64),
+				Properties: make(map[string]float64),
+				Evolution:  make([]PatternState, 0),
+			}
+		}
+
+		// 更新状态
+		if err := pr.updatePatternState(recognized, emergentPattern); err != nil {
+			return fmt.Errorf("failed to update pattern state: %w", err)
+		}
+	}
+
+	return nil
+}
+
+// 添加类型转换方法
+func convertFlowToEmergentPattern(flow *model.FlowPattern) emergence.EmergentPattern {
+	return emergence.EmergentPattern{
+		ID:        flow.ID,
+		Type:      flow.Type,
+		Strength:  flow.Metrics.Strength,
+		Energy:    flow.Metrics.Energy,
+		Formation: flow.Created,
+		Properties: map[string]float64{
+			"confidence": flow.Metrics.Confidence,
+			"stability":  flow.Metrics.Stability,
+		},
+	}
 }
