@@ -125,6 +125,7 @@ type MetricPoint struct {
 	Values    map[string]float64
 }
 
+// -----------------------------------------------------
 // NewAdaptationStrategy 创建新的适应策略管理器
 func NewAdaptationStrategy(matcher *pattern.EvolutionMatcher, handler *mutation.MutationHandler) (*AdaptationStrategy, error) {
 	if matcher == nil {
