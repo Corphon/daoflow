@@ -24,13 +24,6 @@ type BasePattern struct {
 	Created   time.Time
 }
 
-// 实现 SharedPattern 接口
-func (bp *BasePattern) GetID() string           { return bp.ID }
-func (bp *BasePattern) GetType() string         { return bp.Type }
-func (bp *BasePattern) GetStrength() float64    { return bp.Strength }
-func (bp *BasePattern) GetStability() float64   { return bp.Stability }
-func (bp *BasePattern) GetTimestamp() time.Time { return bp.Created }
-
 // PatternAnalyzer 模式分析器接口
 type PatternAnalyzer interface {
 	AnalyzePattern(SharedPattern) (float64, error)
@@ -91,3 +84,11 @@ type PatternChange struct {
 	NewValue interface{}
 	Delta    float64
 }
+
+// ------------------------------------------
+// 实现 SharedPattern 接口
+func (bp *BasePattern) GetID() string           { return bp.ID }
+func (bp *BasePattern) GetType() string         { return bp.Type }
+func (bp *BasePattern) GetStrength() float64    { return bp.Strength }
+func (bp *BasePattern) GetStability() float64   { return bp.Stability }
+func (bp *BasePattern) GetTimestamp() time.Time { return bp.Created }
