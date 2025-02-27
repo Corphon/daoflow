@@ -100,6 +100,7 @@ type PatternCorrelation struct {
 	Threshold float64
 }
 
+// -----------------------------------------
 // NewRuleEngine 创建新的规则引擎
 func NewRuleEngine(
 	detector *PatternDetector,
