@@ -234,6 +234,7 @@ type FlowMetrics struct {
 	ResourceUsage  map[string]float64 // 资源使用率
 }
 
+// -----------------------------------
 // NewFlowBalancer 创建新的流平衡器
 func NewFlowBalancer() *FlowBalancer {
 	lb := &FlowBalancer{}
