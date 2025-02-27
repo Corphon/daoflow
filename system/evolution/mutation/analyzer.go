@@ -95,6 +95,7 @@ type PerformancePoint struct {
 	Metrics map[string]float64
 }
 
+// -----------------------------------------------------
 // NewMutationAnalyzer 创建新的突变分析器
 func NewMutationAnalyzer(detector *MutationDetector, handler *MutationHandler) *MutationAnalyzer {
 	ma := &MutationAnalyzer{
