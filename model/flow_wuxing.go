@@ -80,6 +80,7 @@ type WuXingElementState struct {
 	Timestamp  time.Time          // 时间戳
 }
 
+// ---------------------------------------------
 // NewWuXingElementState 创建新的五行元素状态
 func NewWuXingElementState() *WuXingElementState {
 	return &WuXingElementState{
