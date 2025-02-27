@@ -79,6 +79,55 @@ type QuantumField interface {
 	Measure() (float64, error)
 }
 
+// QuantumSystem 量子系统
+type QuantumSystem struct {
+	mu sync.RWMutex
+
+	// 系统状态
+	states map[string]*QuantumState // 量子态集合
+	field  QuantumField             // 量子场
+
+	// 系统属性
+	entanglement float64 // 系统整体纠缠度
+	coherence    float64 // 系统整体相干性
+	energy       float64 // 系统总能量
+
+	// 配置
+	config *QuantumConfig
+
+	// 缓存
+	cache struct {
+		lastUpdate time.Time
+		metrics    map[string]float64
+	}
+}
+
+// ----------------------------------------------------
+// NewQuantumSystem 创建新的量子系统
+func NewQuantumSystem(config *QuantumConfig) *QuantumSystem {
+	if config == nil {
+		config = DefaultQuantumConfig()
+	}
+
+	return &QuantumSystem{
+		states: make(map[string]*QuantumState),
+		field:  NewQuantumField(ScalarField),
+		config: config,
+	}
+}
+
+// GetStates 获取所有量子态
+func (qs *QuantumSystem) GetStates() []*QuantumState {
+	qs.mu.RLock()
+	defer qs.mu.RUnlock()
+
+	states := make([]*QuantumState, 0, len(qs.states))
+	for _, state := range qs.states {
+		states = append(states, state)
+	}
+	return states
+}
+
 // GetPhaseVariation 获取相位变化率
 func (qs *QuantumState) GetPhaseVariation() float64 {
 	qs.mu.RLock()
@@ -908,4 +957,68 @@ func (qf *quantumField) updateCoherenceAndEntropy() {
 	entropyIncrease := 0.1 * (phaseDiff + energyDiff) * timeDiff
 	currentEntropy := qf.state.GetEntropy()
 	qf.state.SetEnergy(currentEntropy + entropyIncrease)
+}
+
+// GetCoherence 获取量子相干性
+func (qs *QuantumSystem) GetCoherence() float64 {
+	qs.mu.RLock()
+	defer qs.mu.RUnlock()
+	return qs.coherence
+}
+
+// GetEntanglement 获取量子纠缠度
+func (qs *QuantumSystem) GetEntanglement() float64 {
+	qs.mu.RLock()
+	defer qs.mu.RUnlock()
+	return qs.entanglement
+}
+
+// GetStability 获取量子态稳定性
+// 稳定性基于相位一致性和概率幅度的稳定程度
+func (qs *QuantumState) GetStability() float64 {
+	qs.mu.RLock()
+	defer qs.mu.RUnlock()
+
+	// 1. 相位稳定性贡献
+	phaseStability := 1.0 - math.Abs(math.Sin(qs.phase))
+
+	// 2. 概率稳定性贡献
+	// 概率越接近0或1表示状态越确定
+	probStability := 1.0 - 2.0*math.Abs(qs.probability-0.5)
+
+	// 3. 能量稳定性贡献
+	energyStability := math.Exp(-qs.energy / DefaultEnergy)
+
+	// 4. 熵对稳定性的负面影响
+	entropyFactor := 1.0 - qs.entropy
+
+	// 综合计算稳定性
+	stability := (phaseStability*0.3 +
+		probStability*0.3 +
+		energyStability*0.2 +
+		entropyFactor*0.2)
+
+	// 确保结果在[0,1]范围内
+	return math.Max(0, math.Min(1, stability))
+}
+
+// GetMetrics 获取量子态指标
+func (qs *QuantumState) GetMetrics() map[string]interface{} {
+	qs.mu.RLock()
+	defer qs.mu.RUnlock()
+
+	return map[string]interface{}{
+		"probability":  qs.probability,
+		"phase":        qs.phase,
+		"energy":       qs.energy,
+		"entropy":      qs.entropy,
+		"coherence":    qs.GetCoherence(),
+		"entanglement": qs.GetEntanglement(),
+		"stability":    qs.GetStability(),
+	}
+}
+
+// GetState 获取量子状态自身
+func (qs *QuantumState) GetState() *QuantumState {
+	return qs
 }
