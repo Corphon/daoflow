@@ -13,6 +13,10 @@ import (
 	"github.com/Corphon/daoflow/system/types"
 )
 
+const (
+	maxConvergenceHistory = 1000
+)
+
 // AdaptiveOptimization 适应性优化系统
 type AdaptiveOptimization struct {
 	mu sync.RWMutex
@@ -119,6 +123,7 @@ type ConvergencePoint struct {
 	Improvement float64
 }
 
+// -----------------------------------------------------
 // NewAdaptiveOptimization 创建新的适应性优化系统
 func NewAdaptiveOptimization(
 	strategy *AdaptationStrategy,
@@ -581,6 +586,45 @@ func generateOptimizationID() string {
 	return fmt.Sprintf("opt_%d", time.Now().UnixNano())
 }
 
-const (
-	maxConvergenceHistory = 1000
-)
+// RunOptimization 执行指定优化目标的优化
+func (ao *AdaptiveOptimization) RunOptimization(objectives []*OptimizationObjective, constraints map[string]types.Constraint) error {
+	// 锁定状态
+	ao.mu.Lock()
+	defer ao.mu.Unlock()
+
+	// 注册优化目标
+	for _, objective := range objectives {
+		if err := ao.RegisterObjective(objective); err != nil {
+			return err
+		}
+	}
+
+	// 注册约束
+	for name, constraint := range constraints {
+		ao.state.constraints = append(ao.state.constraints, OptimizationConstraint{
+			Type:      "system",
+			Target:    name,
+			Condition: "range",
+			Value: map[string]float64{
+				"min": constraint.Min,
+				"max": constraint.Max,
+			},
+			Priority: 1,
+		})
+	}
+
+	// 执行优化
+	if err := ao.runOptimization(); err != nil {
+		return err
+	}
+
+	// 应用优化结果
+	if err := ao.applyOptimization(); err != nil {
+		return err
+	}
+
+	// 更新指标
+	ao.updateMetrics()
+
+	return nil
+}
