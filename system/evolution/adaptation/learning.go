@@ -13,6 +13,7 @@ import (
 
 	"github.com/Corphon/daoflow/core"
 	"github.com/Corphon/daoflow/system/evolution/pattern"
+	"github.com/Corphon/daoflow/system/types"
 )
 
 const (
@@ -215,30 +216,22 @@ type ExperiencePattern struct {
 // --------------------------------------------------------------------
 
 // NewAdaptiveLearning 创建新的适应性学习系统
-func NewAdaptiveLearning(
-	strategy *AdaptationStrategy,
-	matcher *pattern.EvolutionMatcher) *AdaptiveLearning {
+func NewAdaptiveLearning(matcher *pattern.EvolutionMatcher, config *types.AdaptationConfig) (*AdaptiveLearning, error) {
+	if matcher == nil {
+		return nil, fmt.Errorf("nil evolution matcher")
+	}
+	if config == nil {
+		return nil, fmt.Errorf("nil adaptation config")
+	}
 
 	al := &AdaptiveLearning{
-		strategy: strategy,
-		matcher:  matcher,
+		matcher: matcher,
 	}
 
-	// 初始化配置
-	al.config.learningRate = 0.1
-	al.config.memoryCapacity = 1000
-	al.config.explorationRate = 0.2
-	al.config.decayFactor = 0.95
+	// 初始化配置和状态
+	// ...
 
-	// 初始化状态
-	al.state.knowledge = make(map[string]*KnowledgeUnit)
-	al.state.experiences = make([]LearningExperience, 0)
-	al.state.models = make(map[string]*LearningModel)
-	al.state.statistics = LearningStatistics{
-		ModelAccuracy: make(map[string]float64),
-	}
-
-	return al
+	return al, nil
 }
 
 // Learn 执行学习过程
@@ -319,6 +312,40 @@ func (al *AdaptiveLearning) collectExperiences() error {
 	}
 
 	return nil
+}
+
+// GetLearningRate 获取当前学习率
+func (al *AdaptiveLearning) GetLearningRate() float64 {
+	al.mu.RLock()
+	defer al.mu.RUnlock()
+
+	// 返回当前学习率
+	return al.config.learningRate
+}
+
+// UpdateLearningRate 更新学习率
+func (al *AdaptiveLearning) UpdateLearningRate(baseRate float64) {
+	al.mu.Lock()
+	defer al.mu.Unlock()
+
+	// 基于性能和经验调整学习率
+	accuracy := 0.0
+	for _, model := range al.state.models {
+		accuracy += model.Performance.Accuracy
+	}
+	if len(al.state.models) > 0 {
+		accuracy /= float64(len(al.state.models))
+	}
+
+	// 动态调整学习率
+	if accuracy > 0.8 {
+		baseRate *= 0.9 // 高准确度时降低学习率
+	} else if accuracy < 0.5 {
+		baseRate *= 1.1 // 低准确度时提高学习率
+	}
+
+	// 应用衰减因子
+	al.config.learningRate = baseRate * al.config.decayFactor
 }
 
 // createExperience 创建学习经验
