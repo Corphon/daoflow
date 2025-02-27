@@ -35,7 +35,7 @@ type Recorder struct {
 	// 配置
 	config struct {
 		StoragePath   string        // 存储路径
-		RetentionDays int           // 保留天数
+		RetentionDays time.Duration // 保留时间
 		BatchSize     int           // 批处理大小
 		FlushInterval time.Duration // 刷新间隔
 		Compression   bool          // 是否压缩
@@ -67,6 +67,7 @@ type Recorder struct {
 	flushChan  chan struct{}
 }
 
+// ----------------------------------------------------
 // NewRecorder 创建新的记录器
 func NewRecorder(config types.TraceConfig) *Recorder {
 	r := &Recorder{
@@ -309,7 +310,7 @@ func (r *Recorder) estimateRecordSize(record TraceRecord) int64 {
 
 // cleanOldRecords 清理旧记录
 func (r *Recorder) cleanOldRecords() error {
-	cutoff := time.Now().AddDate(0, 0, -r.config.RetentionDays)
+	cutoff := time.Now().Add(-r.config.RetentionDays)
 
 	// 遍历存储目录
 	err := filepath.Walk(r.config.StoragePath, func(path string, info os.FileInfo, err error) error {
