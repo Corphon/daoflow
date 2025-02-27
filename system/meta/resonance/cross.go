@@ -96,6 +96,7 @@ type TransitionEvent struct {
 	Success     bool
 }
 
+// -----------------------------------------
 // NewCrossResonance 创建新的跨层共振处理器
 func NewCrossResonance(
 	field *field.UnifiedField,
