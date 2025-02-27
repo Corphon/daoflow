@@ -37,6 +37,7 @@ type AnalyzerMetrics struct {
 	History       []types.MetricPoint
 }
 
+// ---------------------------------------------
 // NewPatternAnalyzer 创建新的模式分析器
 func NewPatternAnalyzer() *PatternAnalyzerImpl {
 	pa := &PatternAnalyzerImpl{}
