@@ -64,6 +64,7 @@ type BaseModelEventHandler struct {
 	types []ModelEventType
 }
 
+// ---------------------------------------------
 func (h *BaseModelEventHandler) GetEventTypes() []ModelEventType {
 	return h.types
 }
