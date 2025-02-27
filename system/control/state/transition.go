@@ -102,6 +102,7 @@ type RollbackStep struct {
 	Status     string                 // 步骤状态
 }
 
+// -----------------------------------------
 // NewStateTransition 创建新的状态转换管理器
 func NewStateTransition() *StateTransition {
 	st := &StateTransition{}
