@@ -149,6 +149,7 @@ type TransformRule struct {
 	Transform func(*core.QuantumState, *core.Field, *core.EnergySystem) error
 }
 
+// ---------------------------------------------
 // NewStateTransformer 创建状态转换器
 func NewStateTransformer() *StateTransformer {
 	st := &StateTransformer{
