@@ -18,6 +18,8 @@ type FieldState struct {
 	Frequency float64      // 场频率
 	Amplitude float64      // 场振幅
 	Timestamp time.Time    // 状态时间戳
+	Flow      float64      // 能量流
+	Dimension int          // 维度
 }
 
 // FieldParams 场参数
@@ -74,6 +76,13 @@ type EmergentProperty struct {
 	Created    time.Time          // 创建时间
 }
 
+// Point 二维点结构
+type Point struct {
+	X int
+	Y int
+}
+
+// -----------------------------------------------
 // GetFrequency 获取场频率
 func (fs *FieldState) GetFrequency() float64 {
 	return fs.Frequency
@@ -82,10 +91,4 @@ func (fs *FieldState) GetFrequency() float64 {
 // GetAmplitude 获取场振幅
 func (fs *FieldState) GetAmplitude() float64 {
 	return fs.Amplitude
-}
-
-// Point 二维点结构
-type Point struct {
-	X int
-	Y int
 }
