@@ -26,6 +26,7 @@ type FieldCoupling struct {
 		symmetry string  // 对称性
 		phase    float64 // 相位差 (-π to π)
 		energy   float64 // 耦合能量
+
 	}
 
 	// 量子特性
@@ -64,6 +65,7 @@ type CouplingProperties struct {
 	Type     string  // 耦合类型
 	Phase    float64 // 相位差
 	Energy   float64 // 耦合能量
+	Symmetry string  // 对称性类型
 }
 
 // QuantumProperties 量子特性
@@ -95,6 +97,7 @@ type CouplingTrends struct {
 	Prediction    PredictedState
 }
 
+// -----------------------------------------------------
 // NewFieldCoupling 创建新的场耦合关系
 func NewFieldCoupling(f1, f2 *FieldTensor) (*FieldCoupling, error) {
 	if f1 == nil || f2 == nil {
@@ -511,6 +514,7 @@ func (fc *FieldCoupling) recordState() {
 			Type:     fc.properties.type_,
 			Phase:    fc.properties.phase,
 			Energy:   fc.properties.energy,
+			Symmetry: fc.properties.symmetry,
 		},
 		Quantum: QuantumProperties{
 			Entanglement: fc.quantum.entanglement,
