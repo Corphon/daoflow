@@ -153,6 +153,7 @@ type StateSynchronizer struct {
 	}
 }
 
+// -------------------------------------------------------------------------------
 // NewCoordinator 创建新的协调器
 func NewCoordinator(resolver *Resolver, synchronizer *Synchronizer) *Coordinator {
 	c := &Coordinator{
@@ -872,4 +873,67 @@ func calculateProgress(session *Session) float64 {
 	}
 
 	return float64(completedDecisions) / float64(totalDecisions)
+}
+
+// ProcessSync 处理同步请求
+func (c *Coordinator) ProcessSync(params types.SyncParams) error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	// 1. 验证同步参数
+	if params.Target == "" {
+		return model.WrapError(nil, model.ErrCodeValidation, "empty sync target")
+	}
+
+	// 2. 创建源和目标端点
+	source := &SyncEndpoint{
+		ID:         generateEndpointID("source"),
+		Type:       params.SourceType,
+		Location:   params.Source,
+		Properties: params.Options,
+		State: &EndpointState{
+			Status:     "active",
+			LastUpdate: time.Now(),
+		},
+	}
+
+	target := &SyncEndpoint{
+		ID:         generateEndpointID("target"),
+		Type:       params.TargetType,
+		Location:   params.Target,
+		Properties: params.Options,
+		State: &EndpointState{
+			Status:     "active",
+			LastUpdate: time.Now(),
+		},
+	}
+
+	// 3. 创建同步任务
+	task := &SyncTask{
+		ID:       generateSyncTaskID(),
+		Type:     string(params.Mode),
+		Source:   source,
+		Target:   target,
+		State:    "pending",
+		Priority: int(params.Priority),
+		LastSync: time.Now(),
+	}
+
+	// 4. 委托给同步器处理
+	if err := c.synchronizer.RegisterTask(task); err != nil {
+		return model.WrapError(err, model.ErrCodeOperation,
+			"failed to register sync task")
+	}
+
+	// 5. 执行同步(可选立即执行)
+	return c.synchronizer.Synchronize()
+}
+
+// 辅助函数
+func generateEndpointID(prefix string) string {
+	return fmt.Sprintf("%s_%d", prefix, time.Now().UnixNano())
+}
+
+func generateSyncTaskID() string {
+	return fmt.Sprintf("task_%d", time.Now().UnixNano())
 }
