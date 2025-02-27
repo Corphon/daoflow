@@ -3,6 +3,8 @@
 package field
 
 import (
+	"context"
+	"fmt"
 	"math"
 	"math/cmplx"
 	"sync"
@@ -87,7 +89,7 @@ type YinYangState struct {
 	Yin     float64
 	Yang    float64
 	Harmony float64
-	Phase   model.Phase
+	Phase   model.YinYangPhase
 }
 
 // UnifiedMetrics 统一度量
@@ -154,24 +156,31 @@ type EvolutionPrediction struct {
 	Confidence float64
 }
 
+// 默认维度常量
+const DefaultDimension = 3
+
+// -------------------------------------------------
 // NewUnifiedField 创建新的统一场
-func NewUnifiedField(dimension int) (*UnifiedField, error) {
-	if dimension < 3 {
+func NewUnifiedField(initialStrength float64) (*UnifiedField, error) {
+	if initialStrength < 0 {
 		return nil, model.WrapError(nil, model.ErrCodeValidation,
-			"dimension must be at least 3")
+			"initial strength must be non-negative")
 	}
 
 	uf := &UnifiedField{
 		couplings: make(map[string]*FieldCoupling),
 	}
 
-	// 初始化场组件
-	if err := uf.initComponents(dimension); err != nil {
+	// 初始化场组件 - 使用默认维度
+	if err := uf.initComponents(DefaultDimension); err != nil {
 		return nil, err
 	}
 
+	// 设置初始强度
+	uf.state.Strength = initialStrength
+
 	// 初始化统一特性
-	uf.initProperties(dimension)
+	uf.initProperties(DefaultDimension)
 
 	// 初始化五行属性
 	uf.initWuXingElements()
@@ -294,7 +303,7 @@ func (uf *UnifiedField) calculateUnifiedState() UnifiedState {
 			Yin:     uf.yinyang.GetState().YinEnergy,
 			Yang:    uf.yinyang.GetState().YangEnergy,
 			Harmony: uf.yinyang.GetState().Harmony,
-			Phase:   uf.yinyang.GetState().Phase,
+			Phase:   model.YinYangPhase(uf.yinyang.GetState().Phase),
 		},
 		WuXingElements: model.WuXingElementState{
 			Metal:   uf.wuxing.GetWuXingElementEnergy("Metal"),
@@ -644,7 +653,7 @@ func (uf *UnifiedField) recordFieldState() {
 			Yin:     uf.yinyang.GetState().YinEnergy,
 			Yang:    uf.yinyang.GetState().YangEnergy,
 			Harmony: uf.yinyang.GetState().Harmony,
-			Phase:   uf.yinyang.GetState().Phase,
+			Phase:   model.YinYangPhase(uf.yinyang.GetState().Phase),
 		},
 		WuXingElements: model.WuXingElementState{
 			Metal:   uf.wuxing.GetWuXingElementEnergy("Metal"),
@@ -922,7 +931,7 @@ func (uf *UnifiedField) predictNextState(current UnifiedState) UnifiedState {
 			Yin:     current.YinYang.Yin * (1 + energyTrend),
 			Yang:    current.YinYang.Yang * (1 + energyTrend),
 			Harmony: current.YinYang.Harmony,
-			Phase:   model.FromFloat64(current.YinYang.Phase.ToFloat64() + fieldTrend),
+			Phase:   model.YinYangPhaseFromFloat64(current.YinYang.Phase.ToFloat64() + fieldTrend),
 		},
 		WuXingElements: model.WuXingElementState{
 			Metal:   current.WuXingElements.Metal * (1 + energyTrend),
@@ -1150,4 +1159,186 @@ func (uf *UnifiedField) GetCoherence() float64 {
 		coherence = qs.GetCoherence()
 	}
 	return coherence
+}
+
+// GetMetrics 获取统一场指标
+func (uf *UnifiedField) GetMetrics() map[string]interface{} {
+	uf.mu.RLock()
+	defer uf.mu.RUnlock()
+
+	// 获取当前统一状态
+	currentState := uf.calculateUnifiedState()
+
+	// 返回关键指标
+	return map[string]interface{}{
+		"strength":  currentState.Metrics.Strength,
+		"coherence": currentState.Metrics.Coherence,
+		"stability": currentState.Metrics.Stability,
+		"harmony":   currentState.Metrics.Harmony,
+		"phase":     currentState.Metrics.Phase,
+		"energy":    currentState.Energy,
+		"elements": map[string]float64{
+			"metal": currentState.WuXingElements.Metal,
+			"wood":  currentState.WuXingElements.Wood,
+			"water": currentState.WuXingElements.Water,
+			"fire":  currentState.WuXingElements.Fire,
+			"earth": currentState.WuXingElements.Earth,
+		},
+		"yinyang": map[string]interface{}{
+			"yin":     currentState.YinYang.Yin,
+			"yang":    currentState.YinYang.Yang,
+			"harmony": currentState.YinYang.Harmony,
+			"phase":   currentState.YinYang.Phase.String(),
+		},
+		"coupling":  uf.GetCoupling(),
+		"resonance": uf.GetResonance(),
+	}
+}
+
+// GetCoupling 获取场的耦合强度
+func (uf *UnifiedField) GetCoupling() float64 {
+	uf.mu.RLock()
+	defer uf.mu.RUnlock()
+
+	totalCoupling := 0.0
+	couplingCount := 0
+
+	// 计算所有耦合的平均强度
+	for _, coupling := range uf.couplings {
+		state := coupling.getCurrentState()
+		totalCoupling += state.Properties.Strength
+		couplingCount++
+	}
+
+	if couplingCount == 0 {
+		return 0.0
+	}
+
+	return totalCoupling / float64(couplingCount)
+}
+
+// GetResonance 获取场的共振强度
+func (uf *UnifiedField) GetResonance() float64 {
+	uf.mu.RLock()
+	defer uf.mu.RUnlock()
+
+	totalResonance := 0.0
+	resonanceCount := 0
+
+	// 计算所有耦合的共振强度
+	for _, coupling := range uf.couplings {
+		state := coupling.getCurrentState()
+		totalResonance += state.Dynamics.Resonance
+		resonanceCount++
+	}
+
+	if resonanceCount == 0 {
+		return 0.0
+	}
+
+	return totalResonance / float64(resonanceCount)
+}
+
+// 修改内部结构体定义和getCurrentState方法
+func (fc *FieldCoupling) getCurrentState() CouplingState {
+	return CouplingState{
+		Properties: CouplingProperties{
+			Strength: fc.properties.strength,
+			Type:     fc.properties.type_,
+			Phase:    fc.properties.phase,
+			Energy:   fc.properties.energy,
+			Symmetry: fc.properties.symmetry,
+		},
+		Quantum: QuantumProperties{
+			Entanglement: fc.quantum.entanglement,
+			Coherence:    fc.quantum.coherence,
+			Correlation:  fc.quantum.correlation,
+		},
+		Dynamics: DynamicProperties{
+			Stability: fc.dynamics.stability,
+			Resonance: fc.dynamics.resonance,
+		},
+	}
+}
+
+// Start 启动统一场
+func (uf *UnifiedField) Start(ctx context.Context) error {
+	uf.mu.Lock()
+	defer uf.mu.Unlock()
+
+	// 初始化并启动场组件
+	if err := uf.evolveComponents(); err != nil {
+		return err
+	}
+
+	// 启动周期性演化
+	go uf.evolutionLoop(ctx)
+
+	return nil
+}
+
+// Stop 停止统一场
+func (uf *UnifiedField) Stop() error {
+	uf.mu.Lock()
+	defer uf.mu.Unlock()
+
+	// 清理相关资源
+	return nil
+}
+
+// evolutionLoop 演化循环
+func (uf *UnifiedField) evolutionLoop(ctx context.Context) {
+	ticker := time.NewTicker(evolutionTimeStep)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			if err := uf.Evolve(); err != nil {
+				// 处理错误:
+				// 1. 记录错误
+				uf.mu.Lock()
+				uf.state.History = append(uf.state.History, UnifiedState{
+					Time: time.Now(),
+					Metrics: UnifiedMetrics{
+						Stability: 0.0, // 标记为不稳定状态
+					},
+				})
+				if len(uf.state.History) > maxHistorySize {
+					uf.state.History = uf.state.History[1:]
+				}
+				uf.mu.Unlock()
+
+				// 2. 尝试恢复
+				if recoverErr := uf.tryRecover(); recoverErr != nil {
+					// 如果恢复也失败，记录复合错误
+					model.LogError(fmt.Errorf("evolution failed: %v, recovery failed: %v",
+						err, recoverErr))
+					continue
+				}
+			}
+		}
+	}
+}
+
+// tryRecover 尝试从错误状态恢复
+func (uf *UnifiedField) tryRecover() error {
+	uf.mu.Lock()
+	defer uf.mu.Unlock()
+
+	// 1. 重置到最近的稳定状态
+	if len(uf.state.History) > 1 {
+		for i := len(uf.state.History) - 1; i >= 0; i-- {
+			if uf.state.History[i].Metrics.Stability > 0.5 {
+				uf.state.Energy = uf.state.History[i].Energy
+				uf.state.Phase = uf.state.History[i].Metrics.Phase
+				break
+			}
+		}
+	}
+
+	// 2. 重新初始化不稳定的组件
+	return uf.initComponents(uf.properties.dimension)
 }
