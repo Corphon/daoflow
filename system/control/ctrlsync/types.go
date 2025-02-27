@@ -139,3 +139,5 @@ type SyncStats struct {
 	ResourceUsage     float64 // 资源使用率
 	NetworkThroughput float64 // 网络吞吐量
 }
+
+//----------------------------------------
