@@ -119,6 +119,28 @@ type MetricsFilter struct {
 	Conditions map[string]interface{}
 }
 
+// EnergyMetrics 能量指标
+type EnergyMetrics struct {
+	Total    float64 `json:"total"`    // 总能量
+	Average  float64 `json:"average"`  // 平均能量
+	Variance float64 `json:"variance"` // 能量方差
+}
+
+// StateMetrics 状态指标
+type StateMetrics struct {
+	Transitions int     `json:"transitions"` // 状态转换次数
+	Stability   float64 `json:"stability"`   // 稳定性
+	Phase       Phase   `json:"phase"`       // 当前相位
+}
+
+// PerformanceMetrics 性能指标
+type PerformanceMetrics struct {
+	ThroughPut float64 `json:"throughput"` // 吞吐量
+	Latency    float64 `json:"latency"`    // 延迟
+	ErrorRate  float64 `json:"error_rate"` // 错误率
+}
+
+// ----------------------------------------------------
 // GetTotalEnergy 获取总能量
 func (m *ModelMetrics) GetTotalEnergy() float64 {
 	return m.Energy.Total
