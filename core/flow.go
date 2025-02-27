@@ -43,6 +43,7 @@ type Flow struct {
 	//mu        sync.RWMutex   // 并发控制
 }
 
+// ------------------------------------------
 // generateID 生成唯一标识符
 func GenerateID() string {
 	b := make([]byte, 16)
