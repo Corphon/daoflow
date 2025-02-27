@@ -12,7 +12,7 @@ import (
 	"github.com/Corphon/daoflow/model"
 	"github.com/Corphon/daoflow/system/common"
 	"github.com/Corphon/daoflow/system/evolution/pattern"
-	// Updated import path
+	"github.com/Corphon/daoflow/system/types"
 )
 
 // MutationHandler 突变处理器
@@ -113,6 +113,7 @@ type ResponseEvent struct {
 	Error      error
 }
 
+// ---------------------------------------------------------------------------------------------
 // AdjustParameter 调整系统参数
 func (mh *MutationHandler) AdjustParameter(target string, params map[string]interface{}) error {
 	mh.mu.Lock()
@@ -323,27 +324,30 @@ func (mh *MutationHandler) calculateSystemStability() float64 {
 }
 
 // NewMutationHandler 创建新的突变处理器
-func NewMutationHandler(
-	detector *MutationDetector,
-	generator *pattern.PatternGenerator) *MutationHandler {
+func NewMutationHandler(detector *MutationDetector, config *types.MutationConfig) (*MutationHandler, error) {
+	if detector == nil {
+		return nil, fmt.Errorf("nil mutation detector")
+	}
+	if config == nil {
+		return nil, fmt.Errorf("nil mutation config")
+	}
 
 	mh := &MutationHandler{
-		detector:  detector,
-		generator: generator,
+		detector: detector,
 	}
 
 	// 初始化配置
-	mh.config.responseThreshold = 0.7
-	mh.config.maxRetries = 3
-	mh.config.stabilityTarget = 0.8
-	mh.config.adaptiveResponse = true
+	mh.config.responseThreshold = config.Handler.ResponseThreshold
+	mh.config.maxRetries = config.Handler.MaxRetries
+	mh.config.stabilityTarget = config.Handler.StabilityTarget
+	mh.config.adaptiveResponse = config.Handler.AdaptiveResponse
 
 	// 初始化状态
 	mh.state.active = make(map[string]*MutationResponse)
 	mh.state.history = make([]ResponseEvent, 0)
 	mh.state.strategies = make(map[string]*ResponseStrategy)
 
-	return mh
+	return mh, nil
 }
 
 // Handle 处理突变
