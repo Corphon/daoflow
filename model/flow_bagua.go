@@ -81,6 +81,7 @@ const (
 	ResonantChange            // 共振变化
 )
 
+// ---------------------------------------------
 // NewBaGuaFlow 创建八卦模型
 func NewBaGuaFlow() *BaGuaFlow {
 	// 创建基础模型
