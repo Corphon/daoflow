@@ -66,6 +66,7 @@ type RiskFactor struct {
 	Urgency     int     // 紧急程度
 }
 
+//-------------------------------------------------------
 // 实现 AnalysisResult 接口
 func (ma *MutationAnalysis) GetID() string {
 	return ma.ID
