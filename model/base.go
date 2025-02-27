@@ -33,6 +33,7 @@ type BaseFlowModel struct {
 	}
 }
 
+// -----------------------------------------
 // NewBaseFlowModel 创建基础流模型
 func NewBaseFlowModel(modelType ModelType, capacity float64) *BaseFlowModel {
 	base := &BaseFlowModel{
