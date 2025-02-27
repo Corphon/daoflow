@@ -54,6 +54,7 @@ type Manager struct {
 	cancel context.CancelFunc
 }
 
+// ----------------------------------------------------------
 // NewManager 创建新的管理器实例
 func NewManager(cfg *types.MonitorConfig) (*Manager, error) {
 	if cfg == nil {
