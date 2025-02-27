@@ -114,6 +114,7 @@ type QuantumAnalysis struct {
 	States       []*core.QuantumState // 修改为指针切片类型
 }
 
+// ------------------------------------------------------------------------------------------
 // NewAnalyzer 创建新的分析器
 func NewAnalyzer(tracker *Tracker, recorder *Recorder, config types.TraceConfig) *Analyzer {
 	return &Analyzer{
