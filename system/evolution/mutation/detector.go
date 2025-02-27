@@ -9,8 +9,9 @@ import (
 	"time"
 
 	"github.com/Corphon/daoflow/model"
-	"github.com/Corphon/daoflow/system/common" // 引入共享接口包
+	"github.com/Corphon/daoflow/system/common"
 	"github.com/Corphon/daoflow/system/evolution/pattern"
+	"github.com/Corphon/daoflow/system/types"
 )
 
 // MutationMetrics 突变指标
@@ -99,25 +100,55 @@ type BaselineMetric struct {
 	History []float64
 }
 
+// --------------------------------------------------------------------------------
 // NewMutationDetector 创建新的突变检测器
-func NewMutationDetector(analyzer common.PatternAnalyzer) *MutationDetector {
-
-	md := &MutationDetector{
-		patternAnalyzer: analyzer,
+func NewMutationDetector(config *types.MutationConfig) (*MutationDetector, error) {
+	if config == nil {
+		return nil, fmt.Errorf("nil mutation config")
 	}
 
+	md := &MutationDetector{}
+
 	// 初始化配置
-	md.config.detectionThreshold = 0.75
-	md.config.timeWindow = 10 * time.Minute
-	md.config.sensitivity = 0.8
-	md.config.stabilityFactor = 0.6
+	md.config.detectionThreshold = config.Detection.Threshold
+	md.config.timeWindow = config.Detection.TimeWindow
+	md.config.sensitivity = config.Detection.Sensitivity
+	md.config.stabilityFactor = config.Detection.StabilityFactor
 
 	// 初始化状态
 	md.state.mutations = make(map[string]*Mutation)
 	md.state.observations = make([]MutationObservation, 0)
 	md.state.baselines = make(map[string]*MutationBaseline)
 
-	return md
+	return md, nil
+}
+
+// GetMutationRate 获取当前突变率
+func (md *MutationDetector) GetMutationRate() float64 {
+	md.mu.RLock()
+	defer md.mu.RUnlock()
+
+	// 计算基于当前检测到的突变的突变率
+	totalEvents := len(md.state.mutations)
+	if totalEvents == 0 {
+		return 0.0
+	}
+
+	activeCount := 0
+	for _, mutation := range md.state.mutations {
+		if mutation.IsActive {
+			activeCount++
+		}
+	}
+
+	return float64(activeCount) / float64(totalEvents)
+}
+
+// GetMutationCount 获取当前突变数量
+func (md *MutationDetector) GetMutationCount() int {
+	md.mu.RLock()
+	defer md.mu.RUnlock()
+	return len(md.state.mutations)
 }
 
 // Detect 执行突变检测
@@ -126,10 +157,7 @@ func (md *MutationDetector) Detect() error {
 	defer md.mu.Unlock()
 
 	// 获取当前模式
-	patterns, err := md.recognizer.GetPatterns()
-	if err != nil {
-		return err
-	}
+	patterns := md.recognizer.GetPatterns()
 
 	// 更新观察记录
 	md.updateObservations(patterns)
@@ -162,6 +190,8 @@ func (md *MutationDetector) updateMutations(mutations []*Mutation) {
 			existing.Severity = mutation.Severity
 			existing.Probability = mutation.Probability
 			existing.LastUpdate = currentTime
+			existing.IsActive = (existing.Status == "detected" &&
+				!existing.LastUpdate.Before(currentTime.Add(-md.config.timeWindow)))
 		} else {
 			// 添加新突变
 			mutation.LastUpdate = currentTime
