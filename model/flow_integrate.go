@@ -39,6 +39,7 @@ type IntegrateFlow struct {
 	systemState SystemState
 }
 
+// ---------------------------------------------
 // NewIntegrateFlow 创建集成流模型
 func NewIntegrateFlow() *IntegrateFlow {
 	base := NewBaseFlowModel(ModelIntegrate, 2000.0)
@@ -332,4 +333,142 @@ func (im *IntegrateFlow) Close() error {
 	}
 
 	return im.BaseFlowModel.Close()
+}
+
+// GetCoreState 获取核心状态
+func (im *IntegrateFlow) GetCoreState() CoreState {
+	im.mu.RLock()
+	defer im.mu.RUnlock()
+
+	// 创建CoreState
+	coreState := CoreState{
+		QuantumState: im.entangledState,
+		FieldState:   im.unifiedField,
+		EnergyState:  im.components.energy,
+		Phase:        float64(im.systemState.Phase),
+		Properties: map[string]float64{
+			"harmony": im.systemState.Harmony,
+			"balance": im.systemState.Balance,
+			"entropy": im.systemState.Entropy,
+			"yinyang": im.yinyang.GetState().Energy,
+			"wuxing":  im.wuxing.GetState().Energy,
+			"bagua":   im.bagua.GetState().Energy,
+			"ganzhi":  im.ganzhi.GetState().Energy,
+		},
+	}
+
+	return coreState
+}
+
+// UpdateCoreState 更新核心状态
+func (im *IntegrateFlow) UpdateCoreState(state CoreState) error {
+	im.mu.Lock()
+	defer im.mu.Unlock()
+
+	// 更新量子态
+	if state.QuantumState != nil {
+		*im.entangledState = *state.QuantumState
+	}
+
+	// 更新场
+	if state.FieldState != nil {
+		*im.unifiedField = *state.FieldState
+	}
+
+	// 更新能量系统
+	if im.components.energy != nil && state.EnergyState != nil {
+		*im.components.energy = *state.EnergyState
+	}
+
+	// 更新相位
+	im.systemState.Phase = Phase(state.Phase)
+
+	// 更新属性
+	if state.Properties != nil {
+		if harmony, ok := state.Properties["harmony"]; ok {
+			im.systemState.Harmony = harmony
+		}
+		if balance, ok := state.Properties["balance"]; ok {
+			im.systemState.Balance = balance
+		}
+		if entropy, ok := state.Properties["entropy"]; ok {
+			im.systemState.Entropy = entropy
+		}
+	}
+
+	return nil
+}
+
+// ValidateCoreState 验证核心状态
+func (im *IntegrateFlow) ValidateCoreState() error {
+	im.mu.RLock()
+	defer im.mu.RUnlock()
+
+	// 验证量子态
+	if im.entangledState == nil {
+		return NewModelError(ErrCodeValidation, "nil quantum state", nil)
+	}
+
+	// 验证场
+	if im.unifiedField == nil {
+		return NewModelError(ErrCodeValidation, "nil field", nil)
+	}
+
+	// 验证能量系统
+	if im.components.energy == nil {
+		return NewModelError(ErrCodeValidation, "nil energy system", nil)
+	}
+
+	// 验证系统状态
+	if im.systemState.Energy < 0 || im.systemState.Energy > MaxSystemEnergy {
+		return NewModelError(ErrCodeValidation, "invalid energy value", nil)
+	}
+
+	if im.systemState.Harmony < 0 || im.systemState.Harmony > 1 {
+		return NewModelError(ErrCodeValidation, "invalid harmony value", nil)
+	}
+
+	if im.systemState.Balance < 0 || im.systemState.Balance > 1 {
+		return NewModelError(ErrCodeValidation, "invalid balance value", nil)
+	}
+
+	if im.systemState.Entropy < 0 {
+		return NewModelError(ErrCodeValidation, "invalid entropy value", nil)
+	}
+
+	return nil
+}
+
+// model/flow_integrate.go 文件
+
+// GetYinYangFlow 获取阴阳流模型
+func (im *IntegrateFlow) GetYinYangFlow() *YinYangFlow {
+	im.mu.RLock()
+	defer im.mu.RUnlock()
+
+	return im.yinyang
+}
+
+// GetBaGuaFlow 获取八卦流模型
+func (im *IntegrateFlow) GetBaGuaFlow() *BaGuaFlow {
+	im.mu.RLock()
+	defer im.mu.RUnlock()
+
+	return im.bagua
+}
+
+// GetGanZhiFlow 获取干支流模型
+func (im *IntegrateFlow) GetGanZhiFlow() *GanZhiFlow {
+	im.mu.RLock()
+	defer im.mu.RUnlock()
+
+	return im.ganzhi
+}
+
+// GetWuXingFlow 获取五行流模型
+func (im *IntegrateFlow) GetWuXingFlow() *WuXingFlow {
+	im.mu.RLock()
+	defer im.mu.RUnlock()
+
+	return im.wuxing
 }
