@@ -91,6 +91,7 @@ type GenerationEvent struct {
 	Changes    map[string]float64
 }
 
+// ----------------------------------------------
 // NewPropertyGenerator 创建新的属性生成器
 func NewPropertyGenerator(detector *PatternDetector, field *field.UnifiedField) *PropertyGenerator {
 	pg := &PropertyGenerator{
