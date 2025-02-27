@@ -54,6 +54,7 @@ type MetaModel struct {
 	}
 }
 
+// ---------------------------------------------
 // NewMetaModel 创建元模型
 func NewMetaModel() *MetaModel {
 	base := NewBaseFlowModel(ModelTypeNone, MaxSystemEnergy)
