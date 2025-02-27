@@ -28,8 +28,10 @@ type Mutation struct {
 	DetectedAt  time.Time        // 检测时间
 	LastUpdate  time.Time        // 最后更新时间
 	Status      string           // 当前状态
+	IsActive    bool             // 是否活跃
 }
 
+// ---------------------------------
 // 实现 SharedPattern 接口方法
 func (m *Mutation) GetID() string {
 	return m.ID
