@@ -46,6 +46,7 @@ type EnergyNetwork struct {
 	balance     float64 // 平衡度
 }
 
+// -------------------------------------------
 // NewEnergyNetwork 创建新的能量网络
 func NewEnergyNetwork() *EnergyNetwork {
 	return &EnergyNetwork{
