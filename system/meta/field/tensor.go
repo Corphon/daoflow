@@ -51,6 +51,7 @@ type Vector struct {
 	Direction  []float64
 }
 
+// -----------------------------------------
 // NewFieldTensor 创建新的场张量
 func NewFieldTensor(dimension, rank int) *FieldTensor {
 	ft := &FieldTensor{
