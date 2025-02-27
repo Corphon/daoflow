@@ -27,6 +27,7 @@ type Correlator struct {
 	config *CorrelatorConfig
 }
 
+// ---------------------------------------------------
 // NewCorrelator 创建关联器
 func NewCorrelator() *Correlator {
 	return &Correlator{
