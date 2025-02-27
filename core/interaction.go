@@ -43,6 +43,7 @@ type Interaction struct {
 	}
 }
 
+// -----------------------------------------------
 // NewInteraction 创建新的相互作用
 func NewInteraction() *Interaction {
 	return &Interaction{
