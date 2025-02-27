@@ -93,6 +93,7 @@ type Validator interface {
 	ValidateTransition(*SystemState, *SystemState) error
 }
 
+//-------------------------------------------------
 // NewStateManager 创建新的状态管理器
 func NewStateManager(
 	validator *StateValidator,
