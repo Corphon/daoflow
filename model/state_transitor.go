@@ -79,6 +79,7 @@ type RollbackStep struct {
 	Error      error                  // 执行错误
 }
 
+// ---------------------------------------------
 // NewStateTransitor 创建状态转换器
 func NewStateTransitor() *StateTransitor {
 	st := &StateTransitor{}
