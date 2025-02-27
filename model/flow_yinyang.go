@@ -10,6 +10,19 @@ import (
 	"github.com/Corphon/daoflow/core"
 )
 
+// YinYangPhase 阴阳相位枚举
+type YinYangPhase int
+
+const (
+	YinYangPhaseNull      YinYangPhase = iota
+	YinYangPhaseYin                    // 阴相位
+	YinYangPhaseYang                   // 阳相位
+	YinYangPhaseBalance                // 平衡相位
+	YinYangPhaseTransform              // 转换相位
+	YinYangPhaseChaos                  // 混沌相位
+	YinYangPhaseHarmony                // 和谐相位
+)
+
 // YinYangConstants 阴阳常数
 const (
 	MaxYinYangEnergy = 100.0 // 最大能量
@@ -47,6 +60,44 @@ type YinYangEnergy struct {
 	YinEnergy  float64
 	YangEnergy float64
 	Harmony    float64
+}
+
+// ---------------------------------------------
+// String 将阴阳相位转换为字符串表示
+func (p YinYangPhase) String() string {
+	switch p {
+	case YinYangPhaseNull:
+		return "null"
+	case YinYangPhaseYin:
+		return "yin"
+	case YinYangPhaseYang:
+		return "yang"
+	case YinYangPhaseBalance:
+		return "balance"
+	case YinYangPhaseTransform:
+		return "transform"
+	case YinYangPhaseChaos:
+		return "chaos"
+	case YinYangPhaseHarmony:
+		return "harmony"
+	default:
+		return "unknown"
+	}
+}
+
+// ToFloat64 将阴阳相位转换为浮点数
+func (p YinYangPhase) ToFloat64() float64 {
+	return float64(p)
+}
+
+// YinYangPhaseFromFloat64 从浮点数创建阴阳相位
+func YinYangPhaseFromFloat64(f float64) YinYangPhase {
+	// 确保值在有效范围内
+	phase := int(math.Round(f)) % int(YinYangPhaseHarmony+1)
+	if phase < 0 {
+		phase += int(YinYangPhaseHarmony + 1)
+	}
+	return YinYangPhase(phase)
 }
 
 func (f *YinYangFlow) GetYinYangEnergy() YinYangEnergy {
