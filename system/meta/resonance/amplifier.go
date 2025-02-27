@@ -3,6 +3,7 @@
 package resonance
 
 import (
+	"context"
 	"fmt"
 	"math"
 	"sync"
@@ -28,10 +29,11 @@ type ResonanceAmplifier struct {
 
 	// 基础配置
 	config struct {
-		minAmplitude  float64 // 最小放大幅度
-		maxAmplitude  float64 // 最大放大幅度
-		decayRate     float64 // 衰减率
-		feedbackRatio float64 // 反馈比率
+		minAmplitude          float64       // 最小放大幅度
+		maxAmplitude          float64       // 最大放大幅度
+		decayRate             float64       // 衰减率
+		feedbackRatio         float64       // 反馈比率
+		AmplificationInterval time.Duration // 放大间隔
 	}
 
 	// 放大状态
@@ -89,6 +91,7 @@ type AmplificationEvent struct {
 	Changes     map[string]float64
 }
 
+// --------------------------------------------------------------
 // NewResonanceAmplifier 创建新的共振放大器
 func NewResonanceAmplifier(
 	field *field.UnifiedField,
@@ -106,6 +109,7 @@ func NewResonanceAmplifier(
 	ra.config.maxAmplitude = 10.0
 	ra.config.decayRate = 0.05
 	ra.config.feedbackRatio = 0.2
+	ra.config.AmplificationInterval = 100 * time.Millisecond
 
 	// 初始化状态
 	ra.state.activeResonances = make(map[string]*ResonanceState)
@@ -535,4 +539,39 @@ func copyResonanceState(state *ResonanceState) *ResonanceState {
 
 	copy := *state
 	return &copy
+}
+
+// Start 启动共振放大器
+func (ra *ResonanceAmplifier) Start(ctx context.Context) error {
+	ra.mu.Lock()
+	defer ra.mu.Unlock()
+
+	// 启动放大循环
+	go ra.amplificationLoop(ctx)
+
+	return nil
+}
+
+// Stop 停止共振放大器
+func (ra *ResonanceAmplifier) Stop() error {
+	ra.mu.Lock()
+	defer ra.mu.Unlock()
+
+	// 清理资源
+	return nil
+}
+
+// amplificationLoop 放大循环
+func (ra *ResonanceAmplifier) amplificationLoop(ctx context.Context) {
+	ticker := time.NewTicker(ra.config.AmplificationInterval)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			ra.Amplify()
+		}
+	}
 }
