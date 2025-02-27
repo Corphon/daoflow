@@ -93,6 +93,7 @@ type BranchState struct {
 	Relations     map[HeavenlyStem]float64
 }
 
+// ---------------------------------------------
 // NewGanZhiFlow 创建干支模型
 func NewGanZhiFlow() *GanZhiFlow {
 	// 创建基础模型
