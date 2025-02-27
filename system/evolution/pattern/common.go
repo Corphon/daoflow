@@ -17,6 +17,7 @@ const (
 	maxCoherence   = 0.99
 )
 
+// -------------------------------------------------------------------
 // calculatePatternComplexity 计算模式复杂度
 func calculatePatternComplexity(pattern *RecognizedPattern) float64 {
 	if pattern == nil {
