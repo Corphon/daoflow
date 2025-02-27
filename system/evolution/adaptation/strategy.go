@@ -126,9 +126,13 @@ type MetricPoint struct {
 }
 
 // NewAdaptationStrategy 创建新的适应策略管理器
-func NewAdaptationStrategy(
-	matcher *pattern.EvolutionMatcher,
-	handler *mutation.MutationHandler) *AdaptationStrategy {
+func NewAdaptationStrategy(matcher *pattern.EvolutionMatcher, handler *mutation.MutationHandler) (*AdaptationStrategy, error) {
+	if matcher == nil {
+		return nil, fmt.Errorf("nil evolution matcher")
+	}
+	if handler == nil {
+		return nil, fmt.Errorf("nil mutation handler")
+	}
 
 	as := &AdaptationStrategy{
 		patternMatcher:  matcher,
@@ -136,10 +140,10 @@ func NewAdaptationStrategy(
 	}
 
 	// 初始化配置
-	as.config.strategyUpdateInterval = 30 * time.Minute
+	as.config.strategyUpdateInterval = time.Hour
 	as.config.maxStrategies = 100
-	as.config.minEffectiveness = 0.6
-	as.config.adaptiveThreshold = 0.75
+	as.config.minEffectiveness = 0.5
+	as.config.adaptiveThreshold = 0.7
 
 	// 初始化状态
 	as.state.strategies = make(map[string]*Strategy)
@@ -150,7 +154,7 @@ func NewAdaptationStrategy(
 		History:       make([]MetricPoint, 0),
 	}
 
-	return as
+	return as, nil
 }
 
 // GetRecentResults 获取最近的策略执行结果
