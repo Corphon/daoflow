@@ -140,6 +140,7 @@ type SyncMetrics struct {
 	History        []types.MetricPoint // 历史指标
 }
 
+// ------------------------------------
 // NewSynchronizer 创建新的同步器
 func NewSynchronizer() *Synchronizer {
 	s := &Synchronizer{}
