@@ -18,6 +18,110 @@ const (
 	MetricEmergence
 )
 
+// SystemMetrics 系统级指标
+type SystemMetrics struct {
+	// 基础信息
+	Status        string             `json:"status"`          // 系统状态
+	Health        float64            `json:"health"`          // 健康度
+	AlertCount    int64              `json:"alert_count"`     // 告警计数
+	LastAlertTime time.Time          `json:"last_alert_time"` // 最后告警时间
+	AlertLevels   map[AlertLevel]int `json:"alert_levels"`    // 告警级别统计
+
+	// 时序信息
+	Timestamp time.Time `json:"timestamp"` // 采集时间
+	Period    string    `json:"period"`    // 指标周期
+
+	// 运行指标
+	Uptime     time.Duration `json:"uptime"`      // 运行时间
+	ErrorCount int           `json:"error_count"` // 错误计数
+	EventCount int           `json:"event_count"` // 事件计数
+
+	// 系统资源指标
+	CPU        float64 `json:"cpu"`        // CPU使用率
+	Memory     float64 `json:"memory"`     // 内存使用率
+	Goroutines int     `json:"goroutines"` // Go协程数
+
+	// 性能指标
+	Performance struct {
+		QPS        float64       `json:"qps"`        // 每秒查询数
+		Latency    time.Duration `json:"latency"`    // 平均延迟
+		ErrorRate  float64       `json:"error_rate"` // 错误率
+		Throughput float64       `json:"throughput"` // 吞吐量
+	} `json:"performance"`
+
+	// 资源指标
+	Resources struct {
+		CPU     float64 `json:"cpu"`     // CPU使用率
+		Memory  float64 `json:"memory"`  // 内存使用率
+		IO      float64 `json:"io"`      // IO使用率
+		Network float64 `json:"network"` // 网络使用率
+	} `json:"resources"`
+
+	// 系统状态
+	System struct {
+		Energy    float64            `json:"energy"`    // 系统能量
+		Field     *core.FieldState   `json:"field"`     // 场状态
+		Quantum   *core.QuantumState `json:"quantum"`   // 量子状态
+		Emergence *EmergentProperty  `json:"emergence"` // 涌现属性
+	} `json:"system"`
+
+	// 模型指标
+	Model struct {
+		Integration float64 `json:"integration"` // 整体集成度
+		Coherence   float64 `json:"coherence"`   // 整体相干性
+		Emergence   float64 `json:"emergence"`   // 涌现程度
+	} `json:"model"`
+
+	// 统计信息
+	Stats struct {
+		TotalRequests  int64     `json:"total_requests"`   // 总请求数
+		SuccessCount   int64     `json:"success_count"`    // 成功次数
+		FailureCount   int64     `json:"failure_count"`    // 失败次数
+		LastUpdateTime time.Time `json:"last_update_time"` // 最后更新时间
+	} `json:"stats"`
+
+	// 子系统指标
+	Subsystems map[string]SubsystemMetrics `json:"subsystems"` // 子系统指标
+
+	// 历史记录
+	History []MetricPoint `json:"history"` // 历史指标点
+}
+
+// SubsystemMetrics 子系统指标
+type SubsystemMetrics struct {
+	// 基础信息
+	Status     string             `json:"status"`      // 运行状态
+	Health     float64            `json:"health"`      // 健康度
+	Metrics    map[string]float64 `json:"metrics"`     // 具体指标
+	LastUpdate time.Time          `json:"last_update"` // 最后更新时间
+
+	// 运行指标
+	Uptime      time.Duration `json:"uptime"`       // 运行时间
+	ErrorCount  int           `json:"error_count"`  // 错误计数
+	EventCount  int           `json:"event_count"`  // 事件计数
+	AlertCount  int64         `json:"alert_count"`  // 告警计数
+	ActiveTasks int           `json:"active_tasks"` // 活跃任务数
+
+	// 性能指标
+	Performance struct {
+		QPS        float64       `json:"qps"`        // 每秒查询数
+		Latency    time.Duration `json:"latency"`    // 平均延迟
+		ErrorRate  float64       `json:"error_rate"` // 错误率
+		Throughput float64       `json:"throughput"` // 吞吐量
+	} `json:"performance"`
+
+	// 资源指标
+	Resources struct {
+		CPU     float64 `json:"cpu"`     // CPU使用率
+		Memory  float64 `json:"memory"`  // 内存使用率
+		Storage float64 `json:"storage"` // 存储使用率
+		Network float64 `json:"network"` // 网络使用率
+	} `json:"resources"`
+
+	// 历史记录
+	History []MetricPoint `json:"history"` // 历史指标点
+}
+
 // Alert 告警信息
 type Alert struct {
 	ID      string                 `json:"id"`      // 告警ID
@@ -620,13 +724,21 @@ type AlertData struct {
 
 	// 扩展信息
 	Details map[string]interface{} `json:"details,omitempty"` // 详细信息
+
+	// 关联标识
+	ModelID string `json:"model_id"` // 相关模型ID
+
+	// 指标数据
+	Metrics *AlertMetrics `json:"metrics"` // 告警指标
 }
 
 // ModelAlertData 模型告警数据
 type ModelAlertData struct {
-	Type    model.ModelType    // 模型类型
-	Metrics model.ModelMetrics // 模型指标
-	State   model.ModelState   // 模型状态
+	Type    model.ModelType     `json:"type"`    // 模型类型
+	Metrics *model.ModelMetrics `json:"metrics"` // 使用指针类型
+	State   model.ModelState    `json:"state"`   // 模型状态
+	Quantum *core.QuantumState  `json:"quantum"` // 量子状态
+	Field   *model.FieldState   `json:"field"`   // 场状态
 }
 
 // HandlerStatus 处理器状态
@@ -693,22 +805,6 @@ type Insight struct {
 	Created        time.Time              `json:"created"`         // 创建时间
 }
 
-// AlertSeverity 转 AlertLevel 的转换方法
-func AlertSeverityToLevel(severity AlertSeverity) AlertLevel {
-	switch severity {
-	case SeverityInfo:
-		return AlertLevelInfo
-	case SeverityWarning:
-		return AlertLevelWarning
-	case SeverityError:
-		return AlertLevelError
-	case SeverityCritical:
-		return AlertLevelCritical
-	default:
-		return AlertLevelInfo
-	}
-}
-
 // Report 监控报告
 type Report struct {
 	// 基本信息
@@ -735,4 +831,78 @@ type Report struct {
 
 	// 建议措施
 	Recommendations []string `json:"recommendations"` // 优化建议
+}
+
+// AlertMetrics 告警相关指标
+type AlertMetrics struct {
+	// 基础指标
+	Count     int64         `json:"count"`     // 告警计数
+	Frequency float64       `json:"frequency"` // 告警频率
+	Duration  time.Duration `json:"duration"`  // 持续时间
+
+	// 性能指标
+	LatencyP95 time.Duration `json:"latency_p95"` // 95分位延迟
+	ErrorRate  float64       `json:"error_rate"`  // 错误率
+	QPS        float64       `json:"qps"`         // 每秒查询数
+
+	// 资源指标
+	CPUUsage    float64 `json:"cpu_usage"`    // CPU使用率
+	MemoryUsage float64 `json:"memory_usage"` // 内存使用率
+
+	// 趋势指标
+	TrendSlope float64 `json:"trend_slope"` // 趋势斜率
+	Stability  float64 `json:"stability"`   // 稳定性
+
+	// 历史数据
+	History []MetricPoint `json:"history"` // 历史指标点
+}
+
+// ------------------------------------------------------------
+// AlertSeverity 转 AlertLevel 的转换方法
+func AlertSeverityToLevel(severity AlertSeverity) AlertLevel {
+	switch severity {
+	case SeverityInfo:
+		return AlertLevelInfo
+	case SeverityWarning:
+		return AlertLevelWarning
+	case SeverityError:
+		return AlertLevelError
+	case SeverityCritical:
+		return AlertLevelCritical
+	default:
+		return AlertLevelInfo
+	}
+}
+
+// ToMap 将SystemMetrics转换为map
+func (sm SystemMetrics) ToMap() map[string]interface{} {
+	return map[string]interface{}{
+		"status":       sm.Status,
+		"health":       sm.Health,
+		"alert_count":  sm.AlertCount,
+		"alert_levels": sm.AlertLevels,
+		"timestamp":    sm.Timestamp,
+		"period":       sm.Period,
+		"uptime":       sm.Uptime.String(),
+		"error_count":  sm.ErrorCount,
+		"event_count":  sm.EventCount,
+		// 系统指标
+		"system": map[string]interface{}{
+			"energy":    sm.System.Energy,
+			"field":     sm.System.Field.GetMetrics(),
+			"quantum":   sm.System.Quantum.GetMetrics(),
+			"emergence": sm.System.Emergence,
+		},
+		// 性能指标
+		"performance": map[string]interface{}{
+			"qps":        sm.Performance.QPS,
+			"latency":    sm.Performance.Latency.String(),
+			"error_rate": sm.Performance.ErrorRate,
+			"throughput": sm.Performance.Throughput,
+		},
+		// 资源指标
+		"resources": sm.Resources,
+		// 子系统指标
+		"subsystems": sm.Subsystems,
+	}
 }
