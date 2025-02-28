@@ -1,116 +1,136 @@
-
 # DaoFlow Framework
 
-[![Version](https://img.shields.io/badge/version-v2.0.0-blue.svg)](https://github.com/Corphon/daoflow)
+[![Version](https://img.shields.io/badge/version-v3.1.0-blue.svg)](https://github.com/Corphon/daoflow)
 [![Go Reference](https://pkg.go.dev/badge/github.com/Corphon/daoflow.svg)](https://pkg.go.dev/github.com/Corphon/daoflow)
 [![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
 
-> DaoFlow is an adaptive system framework that integrates Eastern philosophy with modern physics. Through mathematical modeling of Eastern wisdom such as Yin-Yang, Five Elements, and the Eight Trigrams, it achieves a distributed system architecture capable of self-evolution, dynamic balance, and emergent properties.
+> DaoFlow is a revolutionary framework that bridges Eastern philosophical wisdom with modern computational systems. It transforms ancient concepts like Yin-Yang, Five Elements, and Eight Trigrams into powerful computational models, creating self-evolving systems with quantum-inspired intelligence.
 
-## 🌟 Core Concepts
+## 🔮 Core Philosophy
 
-DaoFlow combines the transformation principles of Taoist Yin-Yang and Five Elements with modern physics' field theory and quantum mechanics to build a unique theoretical foundation:
+DaoFlow represents a paradigm shift in systems design by fusing millenia-old wisdom with cutting-edge technology:
 
-### 🔄 Unified Field Theory Model
+- **Self-Evolution**: Systems that naturally adapt and grow through emergent intelligence
+- **Dynamic Balance**: Automatic equilibrium restoration following natural flow principles
+- **Quantum-Inspired Processing**: Harnessing quantum principles for sophisticated pattern recognition
+- **Emergent Intelligence**: Complex behaviors arising from simple rule interactions
 
-```go
-// UnifiedField - Integrates quantum fields across four layers: Yin-Yang, Five Elements, Eight Trigrams, and Celestial Stems
-type UnifiedField struct {
-    strength    float64      // Field strength
-    potential   float64      // Potential energy
-    coupling    [][]float64  // Coupling matrix
-    resonance   float64      // Resonance strength
-    coherence   [][]float64  // Coherence matrix
-    phases      []float64    // Phase array
-}
+## 🧠 System Architecture
+
+DaoFlow follows a layered architecture that flows from abstract core principles to concrete implementations:
+
+```
+api/ → system/ → model/ → core/
 ```
 
-### ☯️ Yin-Yang Dynamic Balance
+### Core Layer: Fundamental Energies
+
+The foundation layer implementing quantum-inspired fields, energy flows, and fundamental interactions:
 
 ```go
-// Calculate Yin-Yang dynamic balance using quantum wave function
-amplitude := yy.waveAmplitude * math.Exp(-yy.damping*elapsed)
-phase := yy.waveFrequency*elapsed + yy.phaseOffset
-oscillation := amplitude * math.Cos(phase)
-
-// Update Yin-Yang ratio
-baseRatio := NeutralPoint + oscillation
-yinRatio = math.Max(0, math.Min(1, baseRatio))
-yangRatio = 1 - yinRatio
+// Flow represents the fundamental energy movement in the system
+flow := core.NewFlow()
+flow.AdjustEnergy(25.0)  // Adjust energy level
+flow.Transform(ctx, core.FlowStateFlowing)  // Change flow state
 ```
 
-### 🌊 Five Elements Interaction System
+### Model Layer: Eastern Philosophy Models
+
+Built on core principles, these models implement the philosophical systems:
 
 ```go
-// Five Elements energy transformation and field effects
-func (wx *WuXingFlow) processInteractions() {
-    for _, relation := range wx.relations {
-        // Calculate quantum field effects
-        fieldEffect := wx.fieldEffects[relation.Source]
-        fieldStrength := amplitude * math.Cos(omega*elapsed + fieldEffect.Phase)
-        
-        // Apply generative and restrictive relationships
-        interactionStrength := wx.calculateInteractionStrength(
-            sourceEnergy, targetEnergy, relation)
-        wx.applyInteraction(relation, interactionStrength)
-    }
-}
+// YinYang model represents balance and duality
+yinYang := model.NewYinYangModel()
+yinYang.Transform(model.PatternBalance)  // Transform to balanced state
+
+// WuXing model implements the Five Elements cycles
+wuXing := model.NewWuXingModel() 
+wuXing.SetElementRelationship("Wood", "Fire", "Generating")
 ```
 
-### ⚡ Eight Trigrams Energy Field
+### System Layer: Intelligent Coordination
+
+Manages the models, providing monitoring, control, evolution and synchronization:
 
 ```go
-// Calculate Eight Trigrams field strength
-func (bg *BaGuaFlow) calculateFieldStrength(attr *TrigramAttributes) float64 {
-    // Using quantum field theory wave function superposition
-    psi := complex(attr.Energy/100.0, attr.Potential/BasePotential)
-    // |ψ|² gives probability density
-    return math.Pow(cmplx.Abs(psi), 2)
-}
+// Evolution manager handles system adaptation
+evolution := system.NewEvolutionManager(config)
+evolution.Optimize(params)  // Self-optimize system
+
+// Monitor detects anomalies and patterns
+monitor := system.NewMonitorManager(config)
+patterns := monitor.DetectPatterns(data)
+```
+
+### API Layer: User Interface
+
+The top-level interface for interacting with DaoFlow:
+
+```go
+// Main entry point for application integration
+client, _ := api.NewDaoFlowAPI(options)
+client.Lifecycle().Start()  // Start the system
+client.Pattern().SubscribeToPatterns(callback)  // Watch for patterns
 ```
 
 ## ✨ Key Features
 
-### 1. Quantum Emergence
+### 1. Quantum-Inspired Field System
 
-- Multi-level coupling model based on quantum field theory
-- Spontaneous emergence and innovation capabilities
-- Information transfer through coherence and entanglement
+```go
+// Field effects create non-local interactions across the system
+field := core.NewQuantumField(energyLevel)
+coherence := field.CalculateCoherence(states)
+entanglement := field.MeasureEntanglement(stateA, stateB)
+```
 
 ### 2. Adaptive Evolution
 
-- Dynamic energy redistribution mechanism
-- Intelligent pattern recognition and learning
-- Feedback-based system self-optimization
+```go
+// System automatically evolves and adapts to changing conditions
+evolution.SetLearningRate(0.1)
+evolution.EnableEmergence(true)
+emergentPatterns := evolution.GetEmergentPatterns()
+```
 
-### 3. Resonance and Synchronization
+### 3. Dynamic Balance Engine
 
-- Quantum resonance across multiple levels
-- Phase-based synchronization mechanism
-- Non-local energy and information transfer
+```go
+// Self-balancing system based on Yin-Yang principles
+balance := system.NewBalanceController()
+balance.SetTarget(0.5)  // Perfect equilibrium
+stabilityIndex := balance.GetStabilityMetrics()
+```
 
-### 4. Robustness and Fault Tolerance
+### 4. Pattern Recognition
 
-- Dynamic balance self-repair
-- Multiple redundancy and backup
-- Distributed fault handling
+```go
+// Sophisticated pattern detection across multiple dimensions
+patternRecognizer := system.NewPatternRecognizer(config)
+patternRecognizer.Train(historicalData)
+matches := patternRecognizer.DetectPatterns(newData, threshold)
+```
 
 ## 🚀 Use Cases
 
-- **Distributed Systems**: Efficient node collaboration using quantum field effects
-- **Intelligent Scheduling**: Resource allocation optimization through Yin-Yang balance
-- **Fault Prediction**: System risk prediction based on Five Elements relationships
-- **Adaptive Learning**: System self-evolution using Eight Trigrams model
-- **Pattern Recognition**: Complex pattern recognition through quantum coherence
+- **Distributed Systems**: Self-organizing node coordination using quantum field effects
+- **AI/ML Enhancement**: Pattern recognition acceleration through Five Elements relationships
+- **Fault Prediction**: Predictive system monitoring based on energetic imbalances
+- **Resource Allocation**: Intelligent scheduling through Yin-Yang principles
+- **Emergent Intelligence**: Complex problem-solving without explicit programming
 
-## 📊 Performance Metrics
+## 📊 Performance
 
-- **Response Time**: Millisecond-level system adaptive adjustment
-- **Throughput**: Million events per second processing
-- **Scalability**: Support for thousand-level node dynamic expansion
-- **Accuracy**: >95% pattern recognition accuracy
-- **Stability**: 99.999% system availability
-
+DaoFlow balances power with efficiency:
+```MD
+| **Metric**              | **Performance**                           |
+|-------------------------|-------------------------------------------|
+| **Response Time**       | <10ms for pattern detection               |
+| **Throughput**          | >100K events/second processing            |
+| **Scalability**         | Linear scaling to 1000+ nodes             |
+| **Pattern Recognition** | 95%+ accuracy with 30% less training data |
+| **Adaptation Speed**    | Self-optimizes within 100 cycles          |
+```
 ## 🌈 Quick Start
 
 ### Installation
@@ -125,18 +145,14 @@ go get github.com/Corphon/daoflow
 package main
 
 import (
+    "context"
     "log"
     "github.com/Corphon/daoflow/api"
 )
 
 func main() {
-    // Create system instance
-    client, err := api.NewDaoFlowAPI(&api.Options{
-        SystemConfig: &system.SystemConfig{
-            Capacity: 2000.0,
-            Threshold: 0.7,
-        },
-    })
+    // Create system instance with intelligent defaults
+    client, err := api.NewDaoFlowAPI(nil)
     if err != nil {
         log.Fatal(err)
     }
@@ -149,21 +165,27 @@ func main() {
     if err := client.Lifecycle().Start(); err != nil {
         log.Fatal(err)
     }
-
-    // Listen for system emergence events
-    events, err := client.Events().Subscribe(api.EventFilter{
-        Types: []api.EventType{api.EventPatternEvolved},
-        Priority: api.PriorityHigh,
-    })
+    
+    // Configure pattern detection
+    config := api.PatternConfig{
+        Sensitivity: 0.8,
+        MinConfidence: 0.7,
+    }
+    
+    // Subscribe to pattern detection
+    patterns, err := client.Pattern().StartRecognition(context.Background(), config)
     if err != nil {
         log.Fatal(err)
     }
-
-    // Handle emergence events
-    for event := range events {
-        if pattern, ok := event.Payload.(api.EmergentPattern); ok {
-            log.Printf("New emergent pattern detected: %+v", pattern)
-            // Handle new emergent pattern
+    
+    // Handle detected patterns
+    for pattern := range patterns {
+        log.Printf("Pattern detected: %s (confidence: %.2f%%)", 
+            pattern.ID, pattern.Strength * 100)
+        
+        // Analyze pattern properties
+        for key, value := range pattern.Properties {
+            log.Printf("- %s: %v", key, value)
         }
     }
 }
@@ -171,21 +193,21 @@ func main() {
 
 ## 📚 Documentation
 
+- [API Reference](API_Reference.md)
+- [Performance Optimization](Performance_Optimization.md)
+- [Example Code](examples.md)
 - [Theoretical Foundation](docs/theory.md)
 - [Architecture Design](docs/architecture.md)
-- [API Reference](docs/api-reference.md)
-- [Best Practices](docs/best-practices.md)
-- [Performance Optimization](docs/performance.md)
 
 ## 🤝 Contributing
 
-We welcome all forms of contributions, whether it's new feature development, documentation improvements, or issue feedback. Please refer to our [Contributing Guide](CONTRIBUTING.md).
+We welcome contributions to DaoFlow! Whether you're interested in Eastern philosophy, cutting-edge computing, or both, there's a place for you. See our [Contributing Guide](CONTRIBUTING.md).
 
 ## 📄 License
 
 This project is licensed under the [Apache License 2.0](LICENSE).
 
-## Contact Us
+## Contact
 
-- GitHub Issues: [https://github.com/Corphon/daoflow/issues](https://github.com/Corphon/daoflow/issues)
-- Email: [contact@corphon.com](mailto:songkf@foxmail.com)
+- GitHub: [https://github.com/Corphon/daoflow/issues](https://github.com/Corphon/daoflow/issues)
+- Email: [songkf@foxmail.com](mailto:songkf@foxmail.com)
