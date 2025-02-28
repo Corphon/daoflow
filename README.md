@@ -122,7 +122,7 @@ matches := patternRecognizer.DetectPatterns(newData, threshold)
 ## 📊 Performance
 
 DaoFlow balances power with efficiency:
-```MD
+
 | **Metric**              | **Performance**                           |
 |-------------------------|-------------------------------------------|
 | **Response Time**       | <10ms for pattern detection               |
@@ -130,7 +130,7 @@ DaoFlow balances power with efficiency:
 | **Scalability**         | Linear scaling to 1000+ nodes             |
 | **Pattern Recognition** | 95%+ accuracy with 30% less training data |
 | **Adaptation Speed**    | Self-optimizes within 100 cycles          |
-```
+
 ## 🌈 Quick Start
 
 ### Installation
