@@ -39,6 +39,41 @@ const (
 	ErrNotFound ErrorCode = "SYS_NOT_FOUND" // 未找到
 	ErrConfig   ErrorCode = "SYS_CONFIG"    // 配置错误
 	ErrMonitor  ErrorCode = "SYS_MONITOR"   // 监控错误
+
+	ErrInvalidConfig ErrorCode = "invalid_config"
+	ErrInvalidState  ErrorCode = "invalid_state"
+
+	// 基础错误码
+	ErrTimeout ErrorCode = "TIMEOUT" // 超时
+	ErrIO      ErrorCode = "IO"      // IO错误
+
+	// 运行时错误
+	ErrState     ErrorCode = "STATE" // 状态错误
+	ErrInit      ErrorCode = "INIT"  // 初始化错误
+	ErrCodeModel ErrorCode = "model_error"
+
+	// 队列相关错误
+	ErrQueue     ErrorCode = "SYS_QUEUE"      // 队列错误
+	ErrQueueFull ErrorCode = "SYS_QUEUE_FULL" // 队列已满错误
+)
+
+// 预定义系统错误
+var (
+	ErrAlreadyRunning = NewSystemError(ErrState, "system already running", nil)
+	ErrNotRunning     = NewSystemError(ErrState, "system not running", nil)
+	ErrInitialized    = NewSystemError(ErrState, "system already initialized", nil)
+	ErrNotInitialized = NewSystemError(ErrState, "system not initialized", nil)
+
+	// 模型相关错误
+	ErrModelNotFound      = NewSystemError(ErrCodeModel, "model not found", nil)
+	ErrModelAlreadyExists = NewSystemError(ErrCodeModel, "model already exists", nil)
+	ErrModelInitFailed    = NewSystemError(ErrCodeModel, "model initialization failed", nil)
+	ErrModelStartFailed   = NewSystemError(ErrCodeModel, "model start failed", nil)
+	ErrModelStopFailed    = NewSystemError(ErrCodeModel, "model stop failed", nil)
+
+	// 能量相关错误
+	ErrInvalidParameter = NewSystemError(ErrInvalid, "invalid parameter value", nil)
+	ErrEnergyOutOfRange = NewSystemError(ErrInvalid, "energy value out of range", nil)
 )
 
 // SystemError 系统错误结构
@@ -53,6 +88,7 @@ type SystemError struct {
 	Context  map[string]any    // 错误上下文
 }
 
+// ------------------------------------------------
 // Error 实现 error 接口
 func (e *SystemError) Error() string {
 	var b strings.Builder
