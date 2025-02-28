@@ -16,7 +16,7 @@
 DaoFlow API provides a comprehensive interface to interact with the quantum-inspired computational framework based on Eastern philosophical principles. This document outlines the available APIs, their usage, and common patterns for effective integration.
 
 The API follows a modular design with specialized interfaces for different aspects of the system:
-
+```MD
 DaoFlowAPI
 ├── Lifecycle() → LifecycleAPI       // System initialization and control
 ├── Pattern() → PatternAPI           // Pattern recognition and analysis
@@ -24,7 +24,7 @@ DaoFlowAPI
 ├── Evolution() → EvolutionAPI       // Adaptive evolution capabilities
 ├── Metrics() → MetricsAPI           // Performance monitoring
 └── Events() → EventsAPI             // Event subscription and handling
-
+```
 
 ## Core API Client
 
