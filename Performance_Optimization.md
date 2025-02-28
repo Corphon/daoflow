@@ -385,7 +385,7 @@ func ConfigurePerformanceReporting(client *api.Client) {
 ```
 
 ### Performance Testing
-```MD
+
 - [ ] **API Layer Optimization**
   - [ ] Configure optimal client settings
   - [ ] Implement request batching
@@ -421,7 +421,7 @@ func ConfigurePerformanceReporting(client *api.Client) {
   - [ ] Configure health checks
   - [ ] Implement performance reporting
   - [ ] Set up alerting thresholds
-```
+
 ## Benchmarks and Performance Targets
 
 | **Metric**                  | **Target Value**     | **Critical Threshold** | **Optimization Method**                           |
