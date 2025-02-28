@@ -1,3 +1,5 @@
+//system/types/config.go
+
 package types
 
 import (
