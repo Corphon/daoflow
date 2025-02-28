@@ -394,3 +394,5 @@ type ResourceAnomaly struct {
 	DetectedAt  time.Time // 检测时间
 	ResolvedAt  time.Time // 解决时间
 }
+
+//----------------------------------
