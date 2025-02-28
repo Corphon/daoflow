@@ -1,3 +1,5 @@
+//system/types/constants.go
+
 package types
 
 import (
