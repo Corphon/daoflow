@@ -43,3 +43,5 @@ type ResolutionMetrics struct {
 	RetryCount  int           `json:"retry_count"`  // 重试次数
 	SuccessRate float64       `json:"success_rate"` // 成功率
 }
+
+//-------------------------------------------------------------
