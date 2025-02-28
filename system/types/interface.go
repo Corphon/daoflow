@@ -13,7 +13,10 @@ import (
 // SyncParams 同步参数
 type SyncParams struct {
 	// 同步目标
+	Source      string            // 同步源标识
+	SourceType  string            // 同步源类型
 	Target      string            // 同步目标标识
+	TargetType  string            // 同步目标类型
 	TargetState model.SystemState // 目标状态
 
 	// 同步配置
@@ -35,11 +38,13 @@ type OptimizationParams struct {
 	// 优化目标
 	Targets     []string           // 优化目标列表
 	Constraints map[string]float64 // 优化约束条件
+	Goals       OptimizationGoals  // 优化目标
 
 	// 优化配置
-	Strategy      string  // 优化策略
-	MaxIterations int     // 最大迭代次数
-	Tolerance     float64 // 收敛容差
+	Strategy      string        // 优化策略
+	MaxIterations int           // 最大迭代次数
+	Tolerance     float64       // 收敛容差
+	TimeLimit     time.Duration // 时间限制
 
 	// 优化选项
 	Options  map[string]interface{} // 自定义选项
@@ -69,6 +74,24 @@ type SystemEvent struct {
 	Error    error    // 处理错误
 }
 
+// StateObserver 状态观察者接口
+type StateObserver interface {
+	// OnStateChange 状态变更通知
+	OnStateChange(event SystemEvent) error
+}
+
+// StateSubject 状态主体接口
+type StateSubject interface {
+	// RegisterObserver 注册观察者
+	RegisterObserver(observer StateObserver)
+
+	// UnregisterObserver 注销观察者
+	UnregisterObserver(observer StateObserver)
+
+	// NotifyObservers 通知观察者
+	NotifyObservers(event SystemEvent)
+}
+
 // EventHandler 事件处理器
 type EventHandler interface {
 	// 处理器信息
@@ -92,26 +115,6 @@ type BaseEventHandler struct {
 	Priority Priority
 }
 
-func (h *BaseEventHandler) GetHandlerID() string {
-	return h.ID
-}
-
-func (h *BaseEventHandler) GetEventTypes() []EventType {
-	return h.Types
-}
-
-func (h *BaseEventHandler) GetPriority() Priority {
-	return h.Priority
-}
-
-func (h *BaseEventHandler) Initialize() error {
-	return nil
-}
-
-func (h *BaseEventHandler) Shutdown() error {
-	return nil
-}
-
 // EventHandlerFunc 事件处理函数类型
 type EventHandlerFunc func(SystemEvent) error
 
@@ -119,34 +122,6 @@ type EventHandlerFunc func(SystemEvent) error
 type funcEventHandler struct {
 	BaseEventHandler
 	handler EventHandlerFunc
-}
-
-// NewEventHandler 创建事件处理器
-func NewEventHandler(id string, types []EventType, priority Priority, handler EventHandlerFunc) EventHandler {
-	return &funcEventHandler{
-		BaseEventHandler: BaseEventHandler{
-			ID:       id,
-			Types:    types,
-			Priority: priority,
-		},
-		handler: handler,
-	}
-}
-
-func (h *funcEventHandler) HandleEvent(event SystemEvent) error {
-	if h.handler != nil {
-		return h.handler(event)
-	}
-	return nil
-}
-
-func (h *funcEventHandler) ShouldHandle(event SystemEvent) bool {
-	for _, t := range h.Types {
-		if t == event.Type {
-			return true
-		}
-	}
-	return false
 }
 
 // 添加事件总线
@@ -331,13 +306,51 @@ type OptimizationController interface {
 	SetOptimizationGoals(goals OptimizationGoals) error
 }
 
-// EventProcessor 事件处理接口
-type EventProcessor interface {
-	// 事件处理
-	ProcessModelEvent(event model.ModelEvent) error
-	ProcessSystemEvent(event SystemEvent) error
+// ------------------------------------------------
+func (h *BaseEventHandler) GetHandlerID() string {
+	return h.ID
+}
 
-	// 事件订阅
-	Subscribe(eventType EventType, handler EventHandler) error
-	Unsubscribe(eventType EventType, handler EventHandler) error
+func (h *BaseEventHandler) GetEventTypes() []EventType {
+	return h.Types
+}
+
+func (h *BaseEventHandler) GetPriority() Priority {
+	return h.Priority
+}
+
+func (h *BaseEventHandler) Initialize() error {
+	return nil
+}
+
+func (h *BaseEventHandler) Shutdown() error {
+	return nil
+}
+
+// NewEventHandler 创建事件处理器
+func NewEventHandler(id string, types []EventType, priority Priority, handler EventHandlerFunc) EventHandler {
+	return &funcEventHandler{
+		BaseEventHandler: BaseEventHandler{
+			ID:       id,
+			Types:    types,
+			Priority: priority,
+		},
+		handler: handler,
+	}
+}
+
+func (h *funcEventHandler) HandleEvent(event SystemEvent) error {
+	if h.handler != nil {
+		return h.handler(event)
+	}
+	return nil
+}
+
+func (h *funcEventHandler) ShouldHandle(event SystemEvent) bool {
+	for _, t := range h.Types {
+		if t == event.Type {
+			return true
+		}
+	}
+	return false
 }
