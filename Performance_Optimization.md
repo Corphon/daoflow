@@ -423,7 +423,7 @@ func ConfigurePerformanceReporting(client *api.Client) {
   - [ ] Set up alerting thresholds
 ```
 ## Benchmarks and Performance Targets
-```md
+
 | **Metric**                  | **Target Value**     | **Critical Threshold** | **Optimization Method**                           |
 |-----------------------------|----------------------|-------------------------|--------------------------------------------------|
 | **Average Response Time**   | `< 10ms`            | `> 50ms`               | Buffer optimization, concurrency tuning          |
@@ -434,7 +434,7 @@ func ConfigurePerformanceReporting(client *api.Client) {
 | **Memory Usage**            | `< 75%`             | `> 90%`                | Object pooling, cache policy tuning              |
 | **Energy Efficiency**       | `> 95%`             | `< 80%`                | Flow optimization, transfer rate tuning          |
 
-```
+
 ## Advanced Optimization Techniques
 Quantum-Inspired Processing
 ```go
