@@ -364,7 +364,7 @@ func handleDaoFlowOperation() {
 ```
 
 ### Common error types:
-```MD
+
 | **Error Constant**         | **Description**                           |
 |:---------------------------|:------------------------------------------|
 | ⚠️ **ErrNotInitialized**   | System has not been initialized          |
@@ -374,7 +374,7 @@ func handleDaoFlowOperation() {
 | 🛑 **ErrInvalidConfig**    | Invalid configuration provided           |
 | ⏳ **ErrTimeout**           | Operation timed out                      |
 | 📉 **ErrResourceLimit**    | Resource limit exceeded                  |
-```
+
 
 ### For extended error information, the error objects also contain:
 
