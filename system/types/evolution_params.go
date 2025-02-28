@@ -38,7 +38,7 @@ type EvolutionMetrics struct {
 
 // EvolutionStatus 演化状态
 type EvolutionStatus struct {
-	Phase     string         // 当前阶段
+	Phase     model.Phase    // 当前阶段
 	Direction model.Vector3D // 演化方向
 	Progress  float64        // 完成进度
 	Stability float64        // 系统稳定性
