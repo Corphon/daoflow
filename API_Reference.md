@@ -364,7 +364,7 @@ func handleDaoFlowOperation() {
 ```
 
 ### Common error types:
-```markdown
+```MD
 | **Error Constant**         | **Description**                           |
 |:---------------------------|:------------------------------------------|
 | ⚠️ **ErrNotInitialized**   | System has not been initialized          |
