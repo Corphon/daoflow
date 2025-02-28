@@ -399,3 +399,5 @@ type ResolutionStep struct {
 	StartTime time.Time // 开始时间
 	EndTime   time.Time // 结束时间
 }
+
+//------------------------------------------------
