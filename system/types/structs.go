@@ -1,144 +1,307 @@
-// system/types/trace_types.go
+// system/types/structs.go
 
 package types
 
 import (
+	"sync"
 	"time"
 
+	"github.com/Corphon/daoflow/core"
 	"github.com/Corphon/daoflow/model"
 )
 
-// 复用 model 包中的类型
+// 复用模型包的基础类型
 type (
-	TraceStatus = model.ModelState // 使用model.Status作为基础状态类型
+	Vector3D     = model.Vector3D
+	ModelState   = model.ModelState
+	FieldState   = core.FieldState
+	QuantumState = core.QuantumState
 )
 
-// Span 表示一个追踪跨度
-type Span struct {
-	ID        SpanID                 // 跨度ID
-	TraceID   TraceID                // 所属追踪ID
-	ParentID  SpanID                 // 父跨度ID
-	Name      string                 // 跨度名称
-	StartTime time.Time              // 开始时间
-	EndTime   time.Time              // 结束时间
-	Duration  time.Duration          // 持续时间
-	Status    SpanStatus             // 状态
-	Tags      map[string]string      // 标签
-	Events    []SpanEvent            // 事件列表
-	Metrics   map[string]float64     // 指标
-	Fields    map[string]interface{} // 字段
-
-	// 模型相关
-	ModelType  model.ModelType   // 关联的模型类型
-	ModelState *model.ModelState // 相关的模型状态
-	ModelFlow  model.FlowModel   // 流状态
+// MetricPoint 表示一个指标数据点
+type MetricPoint struct {
+	Timestamp time.Time          `json:"timestamp"` // 时间戳
+	Values    map[string]float64 `json:"values"`    // 指标值集合
+	Type      string
+	Labels    map[string]string
 }
 
-// SpanEvent 跨度事件
-type SpanEvent struct {
-	Time      time.Time              // 事件时间
-	Name      string                 // 事件名称
-	Type      string                 // 事件类型
-	Fields    map[string]interface{} // 事件字段
-	ModelData *model.ModelEvent      // 模型数据
-	Status    string                 // 事件状态
-	Duration  time.Duration          // 持续时间
-}
+// System 系统结构
+type System struct {
+	mu sync.RWMutex
 
-// TraceID 追踪ID类型
-type TraceID string
+	// 基础信息
+	ID        string    // 系统ID
+	Name      string    // 系统名称
+	Version   string    // 系统版本
+	StartTime time.Time // 启动时间
 
-// Trace 表示一个完整的追踪
-type Trace struct {
-	ID        TraceID          // 追踪ID
-	StartTime time.Time        // 开始时间
-	EndTime   time.Time        // 结束时间
-	Duration  time.Duration    // 持续时间
-	Status    string           // 状态
-	SpanCount int              // 跨度数量
-	Spans     map[SpanID]*Span // 关联的跨度
-
-	// 统计信息
-	Stats struct {
-		ErrorCount  int                // 错误数
-		LatencyMax  time.Duration      // 最大延迟
-		LatencyAvg  time.Duration      // 平均延迟
-		LatencyP95  time.Duration      // P95延迟
-		SpanMetrics map[string]float64 // 跨度指标
+	// 核心模型 - 使用 model 包的流模型
+	models struct {
+		yinyang *model.YinYangFlow
+		wuxing  *model.WuXingFlow
+		bagua   *model.BaGuaFlow
+		ganzhi  *model.GanZhiFlow
+		unified *model.IntegrateFlow
 	}
 
-	// 模型相关
-	ModelType  model.ModelType   // 关联的模型类型
-	ModelState *model.ModelState // 相关的模型状态
-	ModelFlow  model.FlowModel   // 流状态
+	// 系统状态
+	state struct {
+		current  model.SystemState       // 当前状态
+		previous model.SystemState       // 前一状态
+		changes  []model.StateTransition // 状态变更历史
+	}
+
+	// 系统组件
+	components struct {
+		meta      *MetaSystem      // 元系统组件
+		evolution *EvolutionSystem // 演化系统组件
+		control   *ControlSystem   // 控制系统组件
+		monitor   *MonitorSystem   // 监控系统组件
+		resource  *ResourceSystem  // 资源系统组件
+	}
+
+	// 系统配置
+	config SystemConfig
 }
 
-// SpanID 跨度ID类型
-type SpanID string
+// MetaSystem 元系统组件
+type MetaSystem struct {
+	// 场状态
+	field struct {
+		state    core.FieldState   // 场状态
+		quantum  core.QuantumState // 量子状态
+		coupling [][]float64       // 场耦合矩阵
+	}
 
-// TraceEvent 追踪事件
-type TraceEvent struct {
-	model.ModelEvent // 嵌入模型事件
+	// 涌现状态
+	emergence struct {
+		patterns  []core.EmergentPattern    // 涌现模式
+		active    []core.EmergentProperty   // 活跃属性
+		potential []core.PotentialEmergence // 潜在涌现
+	}
 
-	TraceID TraceID // 追踪ID
-	SpanID  SpanID  // 跨度ID
-
+	// 共振状态
+	resonance struct {
+		state     core.ResonanceState // 共振状态
+		coherence float64             // 相干度
+		phase     float64             // 相位
+	}
 }
 
-// SpanStatus 跨度状态常量
-type SpanStatus string
+// EvolutionSystem 演化系统组件
+type EvolutionSystem struct {
+	// 当前状态
+	current struct {
+		level     float64        // 演化层级
+		direction model.Vector3D // 演化方向
+		speed     float64        // 演化速度
+		energy    float64        // 演化能量
+	}
 
-const (
-	SpanStatusNone     SpanStatus = "none"     // 初始状态
-	SpanStatusActive   SpanStatus = "active"   // 活动状态
-	SpanStatusComplete SpanStatus = "complete" // 完成状态
-	SpanStatusError    SpanStatus = "error"    // 错误状态
-)
-
-// TraceConfig 追踪配置
-type TraceConfig struct {
-	// 存储配置
-	StoragePath   string        // 存储路径
-	RetentionDays time.Duration // 保留时间
-	BatchSize     int           // 批处理大小
-	BufferSize    int           // 缓冲区大小
-
-	// 处理配置
-	FlushInterval    time.Duration // 刷新间隔
-	AnalysisInterval time.Duration // 分析间隔
-	Compression      bool          // 是否启用压缩
-	AsyncWrite       bool          // 异步写入
-
-	// 采样配置
-	SampleRate   float64 // 采样率
-	MaxQueueSize int     // 最大队列大小
-
-	// 追踪选项
-	EnableMetrics bool // 启用指标采集
-	EnableEvents  bool // 启用事件记录
-	IncludeModel  bool // 包含模型信息
+	// 演化历史
+	history struct {
+		path    []EvolutionPoint        // 演化路径
+		changes []model.StateTransition // 状态变更
+		metrics []EvolutionMetrics      // 演化指标
+	}
 }
 
-// TracePattern 追踪模式
-type TracePattern struct {
-	ID         string                 // 模式ID
-	Type       string                 // 模式类型
-	Confidence float64                // 置信度
-	StartTime  time.Time              // 开始时间
-	EndTime    time.Time              // 结束时间
-	SpanIDs    []SpanID               // 相关跨度
-	Properties map[string]interface{} // 属性
+// ControlSystem 控制系统组件
+type ControlSystem struct {
+	// 状态控制
+	state struct {
+		manager    *model.StateManager   // 状态管理器
+		validator  *model.StateValidator // 状态验证器
+		transition *model.StateTransitor // 状态转换器
+	}
+
+	// 流控制
+	flow struct {
+		scheduler    *FlowScheduler // 调度器
+		balancer     *FlowBalancer  // 平衡器
+		backpressure *BackPressure  // 背压控制
+	}
+
+	// 同步控制
+	sync struct {
+		coordinator  *SyncCoordinator   // 同步协调器
+		resolver     *ConflictResolver  // 冲突解决器
+		synchronizer *StateSynchronizer // 状态同步器
+	}
 }
 
-// Bottleneck 系统瓶颈
-type Bottleneck struct {
-	ID         string        // 瓶颈ID
-	Type       string        // 瓶颈类型
-	Resource   string        // 资源类型
-	Severity   float64       // 严重程度
-	Impact     float64       // 影响程度
-	Duration   time.Duration // 持续时间
-	Suggestion string        // 改进建议
+// SyncStatus 同步状态
+type SyncStatus struct {
+	State       string    `json:"state"`        // 同步状态(syncing/completed/failed)
+	Progress    float64   `json:"progress"`     // 同步进度(0-1)
+	LastSync    time.Time `json:"last_sync"`    // 最后同步时间
+	NextSync    time.Time `json:"next_sync"`    // 下次同步时间
+	CurrentMode SyncMode  `json:"current_mode"` // 当前同步模式
+	Stats       SyncStats `json:"stats"`        // 同步统计
+	Errors      []error   `json:"errors"`       // 错误记录
 }
 
-//--------------------------------------
+// SyncStats 同步统计信息
+type SyncStats struct {
+	TotalSyncs   int64         `json:"total_syncs"`    // 总同步次数
+	SuccessSyncs int64         `json:"success_syncs"`  // 成功同步次数
+	FailedSyncs  int64         `json:"failed_syncs"`   // 失败同步次数
+	AverageTime  time.Duration `json:"average_time"`   // 平均同步时间
+	LastSyncTime time.Duration `json:"last_sync_time"` // 最后同步耗时
+}
+
+// MonitorSystem 监控系统组件
+type MonitorSystem struct {
+	// 指标监控
+	metrics struct {
+		collector *MetricsCollector // 指标收集器
+		storage   *MetricsStorage   // 指标存储
+		analyzer  *MetricsAnalyzer  // 指标分析器
+	}
+
+	// 告警管理
+	alerts struct {
+		manager  *AlertManager  // 告警管理器
+		handler  *AlertHandler  // 告警处理器
+		notifier *AlertNotifier // 告警通知器
+	}
+
+	// 健康检查
+	health struct {
+		checker   *HealthChecker   // 健康检查器
+		reporter  *HealthReporter  // 健康报告器
+		diagnoser *HealthDiagnoser // 健康诊断器
+	}
+}
+
+// ResourceSystem 资源系统组件
+type ResourceSystem struct {
+	// 资源池
+	pool struct {
+		cpu    *ResourcePool // CPU资源池
+		memory *ResourcePool // 内存资源池
+		energy *ResourcePool // 能量资源池
+	}
+
+	// 资源管理
+	management struct {
+		allocator *ResourceAllocator // 资源分配器
+		scheduler *ResourceScheduler // 资源调度器
+		optimizer *ResourceOptimizer // 资源优化器
+	}
+
+	// 资源监控
+	monitor struct {
+		collector *ResourceCollector // 资源收集器
+		analyzer  *ResourceAnalyzer  // 资源分析器
+		predictor *ResourcePredictor // 资源预测器
+	}
+}
+
+// OptimizationStatus 优化状态
+type OptimizationStatus struct {
+	State      string             `json:"state"`      // 当前状态(optimizing/completed/failed)
+	Progress   float64            `json:"progress"`   // 优化进度(0-1)
+	Goals      OptimizationGoals  `json:"goals"`      // 优化目标
+	Results    map[string]float64 `json:"results"`    // 优化结果
+	StartTime  time.Time          `json:"start_time"` // 开始时间
+	EndTime    time.Time          `json:"end_time"`   // 结束时间
+	Iterations int                `json:"iterations"` // 迭代次数
+	Error      string             `json:"error"`      // 错误信息
+}
+
+// OptimizationGoals 优化目标
+type OptimizationGoals struct {
+	Targets     map[string]float64    `json:"targets"`     // 目标值
+	Weights     map[string]float64    `json:"weights"`     // 目标权重
+	Constraints map[string]Constraint `json:"constraints"` // 约束条件
+	TimeLimit   time.Duration         `json:"time_limit"`  // 时间限制
+	MinGain     float64               `json:"min_gain"`    // 最小增益
+}
+
+// Constraint 约束条件
+type Constraint struct {
+	Min      float64  `json:"min"`      // 最小值
+	Max      float64  `json:"max"`      // 最大值
+	Equals   *float64 `json:"equals"`   // 相等值(可选)
+	Tolerant float64  `json:"tolerant"` // 容差
+}
+
+// ModelEvent 模型事件
+type ModelEvent struct {
+	ID        string                 `json:"id"`         // 事件ID
+	Type      string                 `json:"type"`       // 事件类型
+	ModelType model.ModelType        `json:"model_type"` // 模型类型
+	State     model.ModelState       `json:"state"`      // 模型状态
+	Changes   []StateChange          `json:"changes"`    // 状态变更
+	Timestamp time.Time              `json:"timestamp"`  // 发生时间
+	Details   map[string]interface{} `json:"details"`    // 详细信息
+}
+
+// MonitorMetrics 监控系统指标
+type MonitorMetrics struct {
+	// 基础指标
+	Basic struct {
+		ActiveHandlers int     // 活跃处理器数
+		QueueLength    int     // 队列长度
+		ErrorRate      float64 // 错误率
+		Uptime         float64 // 运行时间(秒)
+	}
+
+	// 性能指标
+	Performance struct {
+		AverageLatency   float64 // 平均延迟
+		ProcessingRate   float64 // 处理速率
+		ResourceUsage    float64 // 资源使用率
+		ConcurrencyLevel int     // 并发级别
+	}
+
+	// 状态指标
+	Status struct {
+		TotalAlerts    int64  // 总告警数
+		HandledAlerts  int64  // 已处理告警数
+		PendingAlerts  int    // 待处理告警数
+		LastUpdateTime string // 最后更新时间
+	}
+
+	// 历史记录
+	History []MetricPoint // 历史指标点
+}
+
+// ----------------------------------------------------------
+// ToModelSystemState converts to model.SystemState
+func ToModelSystemState(s *model.SystemState) *model.SystemState {
+	if s == nil {
+		return nil
+	}
+	return &model.SystemState{
+		Energy:     s.Energy,
+		Entropy:    s.Properties["entropy"].(float64),
+		Harmony:    s.Properties["harmony"].(float64),
+		Balance:    s.Properties["balance"].(float64),
+		Phase:      model.Phase(s.Properties["phase"].(int)),
+		Timestamp:  s.Timestamp,
+		Properties: s.Properties,
+	}
+}
+
+// FromModelSystemState creates SystemState from model.SystemState
+func FromModelSystemState(s *model.SystemState) *SystemState {
+	if s == nil {
+		return nil
+	}
+
+	state := &SystemState{
+		Energy:     s.Energy,
+		Properties: s.Properties,
+		Timestamp:  s.Timestamp,
+	}
+
+	state.Properties["entropy"] = s.Entropy
+	state.Properties["harmony"] = s.Harmony
+	state.Properties["balance"] = s.Balance
+	state.Properties["phase"] = int(s.Phase)
+
+	return state
+}
